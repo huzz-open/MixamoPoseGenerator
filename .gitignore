@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 输出文件
+poses_library/
+*.png
+*.jpg
+*.gif
+
+# 测试用的DAE文件
+*.dae
+*.fbx
+
+# 临时文件
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 工具目录（会自动下载）
+mixamotoopenpose/
