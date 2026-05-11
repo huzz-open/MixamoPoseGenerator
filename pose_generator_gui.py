@@ -10,6 +10,9 @@ import sys
 import subprocess
 import json
 import threading
+import zipfile
+import tempfile
+import shutil
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -523,12 +526,56 @@ class PoseGeneratorGUI:
     def browse_file(self):
         """浏览文件"""
         filename = filedialog.askopenfilename(
-            title="选择 DAE 文件",
-            filetypes=[("Collada Files", "*.dae"), ("All Files", "*.*")]
+            title="选择 DAE 文件或 ZIP 压缩包",
+            filetypes=[
+                ("支持的文件", "*.dae *.zip"),
+                ("Collada Files", "*.dae"),
+                ("ZIP Archives", "*.zip"),
+                ("All Files", "*.*")
+            ]
         )
         if filename:
-            self.dae_file_var.set(filename)
-            self.log(f"已选择文件: {os.path.basename(filename)}", 'info')
+            if filename.lower().endswith('.zip'):
+                dae_name = self._find_dae_in_zip(filename)
+                if dae_name:
+                    self.dae_file_var.set(filename)
+                    self.log(f"已选择ZIP: {os.path.basename(filename)} (包含: {dae_name})", 'info')
+                else:
+                    messagebox.showerror("错误", f"ZIP 压缩包中未找到 DAE 文件:\n{os.path.basename(filename)}")
+                    self.log(f"ZIP 中未找到 DAE 文件: {os.path.basename(filename)}", 'error')
+            else:
+                self.dae_file_var.set(filename)
+                self.log(f"已选择文件: {os.path.basename(filename)}", 'info')
+
+    def _find_dae_in_zip(self, zip_path):
+        """在ZIP中查找DAE文件，返回文件名或None"""
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                dae_files = [n for n in zf.namelist() if n.lower().endswith('.dae')]
+                if dae_files:
+                    return dae_files[0]
+        except zipfile.BadZipFile:
+            self.log(f"无效的ZIP文件: {os.path.basename(zip_path)}", 'error')
+        except Exception as e:
+            self.log(f"读取ZIP失败: {e}", 'error')
+        return None
+
+    def _extract_dae_from_zip(self, zip_path):
+        """从ZIP中提取DAE文件到临时目录，返回临时文件路径或None"""
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                dae_files = [n for n in zf.namelist() if n.lower().endswith('.dae')]
+                if not dae_files:
+                    return None
+                dae_name = dae_files[0]
+                temp_dir = tempfile.mkdtemp(prefix="mixamo_")
+                extracted_path = zf.extract(dae_name, temp_dir)
+                return extracted_path
+        except zipfile.BadZipFile:
+            self.log("无效的ZIP文件，无法提取DAE", 'error')
+        except Exception as e:
+            self.log(f"从ZIP提取DAE失败: {e}", 'error')
+        return None
     
     def browse_output(self):
         """浏览输出目录"""
@@ -552,12 +599,18 @@ class PoseGeneratorGUI:
         """开始生成"""
         # 验证输入
         if not self.dae_file_var.get():
-            messagebox.showerror("错误", "请选择 DAE 文件")
+            messagebox.showerror("错误", "请选择 DAE 文件或 ZIP 压缩包")
             return
         
         if not os.path.exists(self.dae_file_var.get()):
-            messagebox.showerror("错误", "DAE 文件不存在")
+            messagebox.showerror("错误", "文件不存在")
             return
+        
+        # 如果是ZIP文件，验证其中包含DAE
+        if self.dae_file_var.get().lower().endswith('.zip'):
+            if not self._find_dae_in_zip(self.dae_file_var.get()):
+                messagebox.showerror("错误", "ZIP 压缩包中未找到 DAE 文件")
+                return
         
         if self.is_generating:
             messagebox.showwarning("提示", "正在生成中，请稍候...")
@@ -569,7 +622,12 @@ class PoseGeneratorGUI:
         frames = self.frame_count_var.get()
         
         # 计算输出文件夹名称（预览）
-        animation_name = Path(self.dae_file_var.get()).stem
+        input_path = self.dae_file_var.get()
+        if input_path.lower().endswith('.zip'):
+            dae_name = self._find_dae_in_zip(input_path)
+            animation_name = Path(dae_name).stem if dae_name else Path(input_path).stem
+        else:
+            animation_name = Path(input_path).stem
         dir_count = len(directions)
         frame_text = f"{frames}frames" if frames > 0 else "allframes"
         output_folder_name = f"{animation_name}_{frame_text}_{dir_count}dir"
@@ -597,15 +655,27 @@ class PoseGeneratorGUI:
     
     def generate_poses(self):
         """生成姿态（后台线程）"""
+        temp_dae_path = None
         try:
-            dae_file = self.dae_file_var.get()
+            input_file = self.dae_file_var.get()
             preset = self.direction_preset_var.get()
             directions = DIRECTION_CONFIGS[preset]['directions']
             frames = self.frame_count_var.get()
             scale = self.scale_var.get()
             
-            # 创建输出目录 - 包含配置信息
-            animation_name = Path(dae_file).stem
+            # 处理ZIP文件：提取DAE到临时目录
+            if input_file.lower().endswith('.zip'):
+                self.log("正在从ZIP中提取DAE文件...", 'info')
+                temp_dae_path = self._extract_dae_from_zip(input_file)
+                if not temp_dae_path:
+                    self.log("错误：无法从ZIP中提取DAE文件", 'error')
+                    return
+                dae_file = temp_dae_path
+                animation_name = Path(temp_dae_path).stem
+                self.log(f"已提取: {animation_name}.dae", 'success')
+            else:
+                dae_file = input_file
+                animation_name = Path(dae_file).stem
             dir_count = len(directions)
             frame_text = f"{frames}frames" if frames > 0 else "allframes"
             
@@ -676,6 +746,15 @@ class PoseGeneratorGUI:
             traceback.print_exc()
         
         finally:
+            # 清理临时提取的DAE文件
+            if temp_dae_path:
+                try:
+                    temp_dir = os.path.dirname(temp_dae_path)
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    self.log("已清理临时文件", 'info')
+                except Exception:
+                    pass
+            
             self.is_generating = False
             self.root.after(0, lambda: self.generate_btn.config(
                 state='normal',
