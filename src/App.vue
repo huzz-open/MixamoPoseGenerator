@@ -28,7 +28,9 @@ const preview = usePreview(() => renderedDirections.value as any[])
 // Config state
 const directionPreset = ref<DirectionPreset>('four')
 const skeletonMode = ref<SkeletonMode>('openpose')
-const drawHands = ref(false)
+const drawHands = ref(true)
+const drawFace = ref(true)
+const xinsrScaling = ref(false)
 const scale = ref(2.0)
 const exportPng = ref(true)
 const exportMp4 = ref(false)
@@ -38,6 +40,12 @@ const videoFps = ref(24)
 const loopMode = ref<LoopMode>('auto')
 const loopCount = ref(4)
 const loopDuration = ref(3.5)
+
+const renderOpts = computed(() => ({
+  drawHands: drawHands.value,
+  drawFace: drawFace.value,
+  xinsrScaling: xinsrScaling.value,
+}))
 
 const directionNames = computed(() =>
   renderedDirections.value.map(d => d.name)
@@ -74,7 +82,7 @@ async function triggerPreview() {
     parseResult.value as ParseResult,
     directionPreset.value,
     skeletonMode.value,
-    drawHands.value,
+    renderOpts.value,
     scale.value,
   )
   if (renderedDirections.value.length > 0) {
@@ -90,7 +98,7 @@ watch(parseResult, (result) => {
 })
 
 // Auto-regenerate on discrete config changes (immediate)
-watch([directionPreset, skeletonMode, drawHands], () => {
+watch([directionPreset, skeletonMode, drawHands, drawFace, xinsrScaling], () => {
   if (parseResult.value) triggerPreview()
 })
 
@@ -141,7 +149,7 @@ async function onExport() {
       parseResult.value as ParseResult,
       directionPreset.value,
       skeletonMode.value,
-      drawHands.value,
+      renderOpts.value,
       scale.value,
       videoWidth.value,
       videoHeight.value,
@@ -187,6 +195,8 @@ async function onExport() {
           :direction-preset="directionPreset"
           :skeleton-mode="skeletonMode"
           :draw-hands="drawHands"
+          :draw-face="drawFace"
+          :xinsr-scaling="xinsrScaling"
           :export-png="exportPng"
           :export-mp4="exportMp4"
           :video-width="videoWidth"
@@ -200,6 +210,8 @@ async function onExport() {
           @update:direction-preset="directionPreset = $event"
           @update:skeleton-mode="skeletonMode = $event"
           @update:draw-hands="drawHands = $event"
+          @update:draw-face="drawFace = $event"
+          @update:xinsr-scaling="xinsrScaling = $event"
           @update:export-png="exportPng = $event"
           @update:export-mp4="exportMp4 = $event"
           @update:video-width="videoWidth = $event"

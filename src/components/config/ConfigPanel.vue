@@ -6,6 +6,8 @@ const props = defineProps<{
   directionPreset: DirectionPreset
   skeletonMode: SkeletonMode
   drawHands: boolean
+  drawFace: boolean
+  xinsrScaling: boolean
   exportPng: boolean
   exportMp4: boolean
   videoWidth: number
@@ -22,6 +24,8 @@ const emit = defineEmits<{
   'update:directionPreset': [value: DirectionPreset]
   'update:skeletonMode': [value: SkeletonMode]
   'update:drawHands': [value: boolean]
+  'update:drawFace': [value: boolean]
+  'update:xinsrScaling': [value: boolean]
   'update:exportPng': [value: boolean]
   'update:exportMp4': [value: boolean]
   'update:videoWidth': [value: number]
@@ -35,10 +39,10 @@ const emit = defineEmits<{
 
 const dirPresets = Object.entries(DIRECTION_CONFIGS) as [DirectionPreset, typeof DIRECTION_CONFIGS[DirectionPreset]][]
 
-const skeletonModes: { value: SkeletonMode; label: string }[] = [
-  { value: 'raw', label: '原始骨架' },
-  { value: 'openpose', label: 'OpenPose 18点' },
-  { value: 'dwpose', label: 'DWPose (Wan 2.2)' },
+const skeletonModes: { value: SkeletonMode; label: string; desc: string }[] = [
+  { value: 'raw', label: '原始骨架', desc: '' },
+  { value: 'openpose', label: 'OpenPose', desc: 'ControlNet / Wan-Fun' },
+  { value: 'dwpose', label: 'DWPose', desc: 'Wan 2.1/2.2 Animate' },
 ]
 </script>
 
@@ -71,17 +75,35 @@ const skeletonModes: { value: SkeletonMode; label: string }[] = [
             :checked="skeletonMode === m.value"
             @change="emit('update:skeletonMode', m.value)"
           />
-          <span>{{ m.label }}</span>
+          <span>{{ m.label }}<span v-if="m.desc" class="mode-desc"> ({{ m.desc }})</span></span>
         </label>
       </div>
-      <label class="checkbox-label">
-        <input
-          type="checkbox"
-          :checked="drawHands"
-          @change="emit('update:drawHands', ($event.target as HTMLInputElement).checked)"
-        />
-        <span>手部关键点</span>
-      </label>
+      <div v-if="skeletonMode !== 'raw'" class="checkbox-group" style="margin-top:4px">
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            :checked="drawHands"
+            @change="emit('update:drawHands', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>手部关键点</span>
+        </label>
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            :checked="drawFace"
+            @change="emit('update:drawFace', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>面部关键点 (68点)</span>
+        </label>
+        <label v-if="skeletonMode === 'openpose'" class="checkbox-label">
+          <input
+            type="checkbox"
+            :checked="xinsrScaling"
+            @change="emit('update:xinsrScaling', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>SDXL 高分辨率适配 (xinsr)</span>
+        </label>
+      </div>
     </section>
 
     <div class="divider" />
@@ -176,6 +198,7 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
   padding: 2px 0; font-size: 13px; color: var(--text-secondary);
 }
 .radio-label:hover, .checkbox-label:hover { color: var(--text-primary); }
+.mode-desc { font-size: 11px; color: var(--text-secondary); opacity: 0.7; }
 .video-opts {
   display: flex; flex-direction: column; gap: 6px;
   padding: 8px; background: var(--bg-secondary); border-radius: 6px;

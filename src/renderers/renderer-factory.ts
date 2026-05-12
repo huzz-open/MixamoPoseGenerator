@@ -5,25 +5,31 @@ import { renderOpenposeFrame } from './canvas2d/openpose-renderer'
 import { renderDwposeFrame } from './canvas2d/dwpose-renderer'
 import { mapFrameToOpenpose } from '../core/openpose-mapper'
 
+export interface RenderOptions {
+  drawHands: boolean
+  drawFace: boolean
+  xinsrScaling: boolean
+}
+
 export function renderFrame(
   mode: SkeletonMode,
   joints: FrameData,
   bones: Bone[],
   width: number,
   height: number,
-  drawHands: boolean,
+  opts: RenderOptions,
 ): HTMLCanvasElement {
   if (mode === 'raw') {
     return renderRawFrame(joints, bones, width, height)
   }
 
-  const opFrame = mapFrameToOpenpose(joints, drawHands)
+  const opFrame = mapFrameToOpenpose(joints, opts.drawHands, opts.drawFace)
 
   if (mode === 'dwpose') {
-    return renderDwposeFrame(opFrame, width, height, drawHands)
+    return renderDwposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace)
   }
 
-  return renderOpenposeFrame(opFrame, width, height, drawHands)
+  return renderOpenposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace, opts.xinsrScaling)
 }
 
 export function renderOpFrame(
@@ -31,10 +37,10 @@ export function renderOpFrame(
   opFrame: OpenPoseFrame,
   width: number,
   height: number,
-  drawHands: boolean,
+  opts: RenderOptions,
 ): HTMLCanvasElement {
   if (mode === 'dwpose') {
-    return renderDwposeFrame(opFrame, width, height, drawHands)
+    return renderDwposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace)
   }
-  return renderOpenposeFrame(opFrame, width, height, drawHands)
+  return renderOpenposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace, opts.xinsrScaling)
 }

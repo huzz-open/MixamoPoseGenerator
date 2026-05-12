@@ -15,6 +15,8 @@ export interface DirectionConfig {
 export interface RenderConfig {
   skeletonMode: SkeletonMode
   drawHands: boolean
+  drawFace: boolean
+  xinsrScaling: boolean
   scale: number
   width: number
   height: number

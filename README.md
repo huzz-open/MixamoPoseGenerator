@@ -6,7 +6,8 @@
 
 - **DAE 文件解析** — 解析 Mixamo 导出的 COLLADA (.dae) 动画文件，提取骨骼关键帧数据
 - **多方向渲染** — 支持单方向、左右、四方向（上下左右）、八方向的骨架姿态生成
-- **多种骨架模式** — 支持 Raw（原始骨骼）、OpenPose、DWPose 三种渲染模式
+- **多种骨架模式** — 支持 Raw（原始骨骼）、OpenPose（ControlNet/Wan-Fun）、DWPose（Wan Animate）三种渲染模式
+- **完整关键点** — Body 18 点 + Face 68 点 + Hand 21 点（面部/手部可独立开关）
 - **实时预览** — 逐帧预览动画，支持播放/暂停、帧跳转
 - **PNG 导出** — 将所有方向的骨架帧导出为 PNG 图片（ZIP 打包）
 - **MP4 视频导出** — 支持自定义分辨率、帧率和循环模式的 MP4 视频导出
@@ -52,7 +53,7 @@ npm run preview  # 预览构建产物
 | 7 | Left Wrist | 16 | Right Ear |
 | 8 | Right Hip | 17 | Left Ear |
 
-手部使用 **21-Keypoint** 格式（Wrist + 5 指 × 4 关节）。
+手部使用 **21-Keypoint** 格式（Wrist + 5 指 × 4 关节）。面部使用 **68-Keypoint** 格式（iBUG 300-W 标准：下颌线 17 + 眉毛 10 + 鼻子 9 + 眼睛 12 + 嘴唇 20）。
 
 ### OpenPose 模式
 
@@ -63,15 +64,14 @@ npm run preview  # 预览构建产物
 **渲染流程**：
 1. 画 17 条肢体：用 `ellipse2Poly` 生成椭圆多边形，颜色为对应 limb 色的 **60%** 亮度（`color × 0.6`）
 2. 画 18 个关节圆点：使用完整亮度颜色
+3. 画手部连线（HSV 彩虹色 thickness=2）+ 蓝色关节圆点（radius=4）
+4. 画面部 68 白色圆点（radius=3，iBUG 300-W 标准格式）
 
-**参数**：
-- `stickwidth = 4`，按画布尺寸做自适应缩放（对齐 [xinsir/controlnet-openpose-sdxl-1.0](https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0) 的高分辨率缩放策略：`scale = max_side < 500 ? 1 : min(2 + floor(max_side / 1000), 7)`）
-- 关节圆半径：`4 × stickScale`（原版为固定 4，此处随分辨率自适应以避免高分辨率下关节过小）
+**参数**（默认与上游完全一致）：
+- `stickwidth = 4`，`joint_radius = 4`（固定）
+- 可选 xinsr 高分辨率缩放（对齐 [xinsir/controlnet-openpose-sdxl-1.0](https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0)：`scale = max_side < 500 ? 1 : min(2 + floor(max_side / 1000), 7)`），默认关闭
 - 手部边：`cv2.line` thickness=2，HSV 彩虹色；关节：蓝色圆点 radius=4
-
-**与上游差异**：
-- xinsir 缩放始终启用（上游通过 `xinsr_stick_scaling` 参数可选开启）
-- 关节圆半径随 stickScale 缩放（上游固定 4px）— 确保高分辨率输出视觉一致
+- 面部：68 个白色圆点 radius=3（从 Mixamo 头部骨骼近似生成）
 
 ### DWPose 模式
 
@@ -81,10 +81,12 @@ npm run preview  # 预览构建产物
 - [Wan2GP · `preprocessing/dwpose/util.py :: draw_bodypose`](https://github.com/deepbeepmeep/Wan2GP/blob/main/preprocessing/dwpose/util.py)（Copyright Alibaba）
 - [ComfyUI-WanVideoWrapper · `unianimate/dwpose/util.py`](https://github.com/kijai/ComfyUI-WanVideoWrapper/blob/main/unianimate/dwpose/util.py)
 
-**渲染流程**（三步法，与 OpenPose 的关键区别）：
+**渲染流程**（与 OpenPose 的关键区别）：
 1. 画 17 条肢体：用 `ellipse2Poly` 生成椭圆多边形，使用 **完整亮度** 颜色
 2. **全画布暗化 `× 0.6`**：对已绘制的所有像素统一乘以 0.6
 3. 画 18 个关节圆点：在暗化后的画面上画 **完整亮度** 圆点
+4. 画手部连线（HSV 彩虹色 thickness=2）+ 蓝色关节圆点（radius=4）
+5. 画面部 68 白色圆点（radius=3）
 
 **参数**（与上游完全一致）：
 - `stickwidth = 4`，**不缩放**
@@ -99,9 +101,11 @@ npm run preview  # 预览构建产物
 |:---|:---|:---|
 | 肢体颜色 | `color × 0.6`（逐条暗化） | 全亮 → 全局 `× 0.6` |
 | 关节颜色 | 全亮 | 全亮（叠在暗化画面上） |
-| stickwidth 缩放 | 随分辨率自适应 | 固定 4px |
-| 关节半径 | `4 × stickScale` | 固定 4px |
-| 目标模型 | ControlNet (SD/SDXL) | Wan 2.1 / 2.2 |
+| stickwidth | 固定 4px（可选 xinsr 缩放） | 固定 4px |
+| 关节半径 | 固定 4px（可选 xinsr 缩放） | 固定 4px |
+| 面部 | 68 白色圆点（可选） | 68 白色圆点（可选） |
+| 手部 | HSV 彩虹连线 + 蓝色圆点（可选） | HSV 彩虹连线 + 蓝色圆点（可选） |
+| 目标模型 | ControlNet (SD/SDXL) / Wan-Fun | Wan 2.1 / 2.2 Animate |
 | 参考实现 | controlnet_aux | Wan2GP / Alibaba |
 
 ### Mixamo → OpenPose 关键点映射
@@ -124,7 +128,7 @@ npm run preview  # 预览构建产物
 | `mixamorig_LeftLeg` | left_knee (12) |
 | `mixamorig_LeftFoot` | left_ankle (13) |
 
-面部关键点（nose、eyes、ears）由 `mixamorig_Head` / `mixamorig_HeadTop_End` 推导生成。手部关键点从 `mixamorig_{Left/Right}Hand{Finger}{1-4}` 映射到 21 点手部格式。
+面部 body 关键点（nose、eyes、ears）由 `mixamorig_Head` / `mixamorig_HeadTop_End` 推导生成。面部 68 点关键点使用 iBUG 300-W 标准模板，根据头部骨骼位置和朝向进行仿射变换近似生成。手部关键点从 `mixamorig_{Left/Right}Hand{Finger}{1-4}` 映射到 21 点手部格式。
 
 ---
 

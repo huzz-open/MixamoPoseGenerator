@@ -57,6 +57,33 @@ function vecNorm(v: Vec3): Vec3 | null {
   return [v[0] / l, v[1] / l, v[2] / l]
 }
 
+// iBUG 300-W standard 68-point face template (normalized ~[-0.5, 0.5])
+// Source: https://github.com/LynnHo/Facial-Landmarks-of-Face-Datasets/blob/master/standard_landmark_68pts.txt
+const FACE_68_TEMPLATE: [number, number][] = [
+  [-0.51105,-0.24368],[-0.50919,-0.11102],[-0.49652,0.02327],[-0.47124,0.15701],
+  [-0.42508,0.28046],[-0.34844,0.38646],[-0.24897,0.47259],[-0.13143,0.53458],
+  [0.00309,0.55314],[0.13544,0.53128],[0.24665,0.46490],[0.33960,0.37596],
+  [0.40937,0.26841],[0.45088,0.14570],[0.47487,0.01464],[0.48653,-0.11700],
+  [0.48685,-0.24627],
+  [-0.41404,-0.36757],[-0.35431,-0.42701],[-0.26933,-0.44896],[-0.17910,-0.44080],
+  [-0.09441,-0.41361],
+  [0.09693,-0.41416],[0.18049,-0.44053],[0.26842,-0.44832],[0.35093,-0.42576],
+  [0.40611,-0.36559],
+  [0.00424,-0.29384],[0.00491,-0.21672],[0.00530,-0.14329],[0.00612,-0.06733],
+  [-0.11396,0.02484],[-0.05713,0.03876],[0.00402,0.04893],[0.06433,0.03958],
+  [0.11914,0.02668],
+  [-0.32440,-0.26271],[-0.26523,-0.29584],[-0.19653,-0.29544],[-0.13453,-0.25383],
+  [-0.19817,-0.23839],[-0.26746,-0.23779],
+  [0.13330,-0.25298],[0.19726,-0.29485],[0.26592,-0.29320],[0.32244,-0.25975],
+  [0.26697,-0.23612],[0.19851,-0.23697],
+  [-0.19348,0.22360],[-0.12398,0.16954],[-0.04830,0.13928],[0.00488,0.15346],
+  [0.05858,0.13932],[0.13269,0.17050],[0.19716,0.22352],
+  [0.13447,0.27243],[0.06516,0.29927],[0.00461,0.30451],[-0.05574,0.29914],
+  [-0.12687,0.27183],
+  [-0.16628,0.22138],[-0.05071,0.20801],[0.00463,0.21274],[0.06050,0.20851],
+  [0.17000,0.22193],[0.06141,0.21976],[0.00473,0.22424],[-0.05154,0.21919],
+]
+
 function deriveFaceKeypoints(joints: FrameData): Record<string, Vec3> {
   const headTop = joints.get('mixamorig_HeadTop_End')
   const headBase = joints.get('mixamorig_Head')
@@ -104,6 +131,43 @@ function deriveFaceKeypoints(joints: FrameData): Record<string, Vec3> {
   return result
 }
 
+function deriveFace68Landmarks(joints: FrameData): (Vec3 | null)[] | null {
+  const headTop = joints.get('mixamorig_HeadTop_End')
+  const headBase = joints.get('mixamorig_Head')
+  const neck = joints.get('mixamorig_Neck')
+  const rShoulder = joints.get('mixamorig_RightArm')
+  const lShoulder = joints.get('mixamorig_LeftArm')
+
+  if (!headBase || !headTop || !neck) return null
+
+  const headCenter = vecMid(headBase, headTop)
+  const headHeight = vecLen(vecSub(headTop, neck))
+  if (headHeight < 1e-6) return null
+
+  const upVec = vecNorm(vecSub(headTop, neck))
+  if (!upVec) return null
+
+  let rightVec: Vec3 | null = null
+  if (rShoulder && lShoulder) {
+    rightVec = vecNorm(vecSub(rShoulder, lShoulder))
+  }
+  if (!rightVec) rightVec = [1, 0, 0]
+
+  const faceScale = headHeight * 0.7
+  const faceCenterOffset = vecScale(upVec, -headHeight * 0.05)
+  const faceCenter = vecAdd(headCenter, faceCenterOffset)
+
+  const result: (Vec3 | null)[] = []
+  for (const [tx, ty] of FACE_68_TEMPLATE) {
+    const pt = vecAdd(
+      vecAdd(faceCenter, vecScale(rightVec, tx * faceScale)),
+      vecScale(upVec, -ty * faceScale),
+    )
+    result.push(pt)
+  }
+  return result
+}
+
 function mapHandKeypoints(joints: FrameData, side: 'Left' | 'Right'): (Vec3 | null)[] | null {
   const prefix = `mixamorig_${side}Hand`
   const wrist = joints.get(prefix)
@@ -124,7 +188,7 @@ function mapHandKeypoints(joints: FrameData, side: 'Left' | 'Right'): (Vec3 | nu
   return kps
 }
 
-export function mapFrameToOpenpose(joints: FrameData, drawHands: boolean): OpenPoseFrame {
+export function mapFrameToOpenpose(joints: FrameData, drawHands: boolean, drawFace: boolean = true): OpenPoseFrame {
   const faceKps = deriveFaceKeypoints(joints)
 
   const body: (Vec3 | null)[] = new Array(18).fill(null)
@@ -146,9 +210,10 @@ export function mapFrameToOpenpose(joints: FrameData, drawHands: boolean): OpenP
     body,
     leftHand: drawHands ? mapHandKeypoints(joints, 'Left') : null,
     rightHand: drawHands ? mapHandKeypoints(joints, 'Right') : null,
+    face: drawFace ? deriveFace68Landmarks(joints) : null,
   }
 }
 
-export function mapToOpenpose(rawFrames: FrameData[], drawHands: boolean): OpenPoseFrame[] {
-  return rawFrames.map(frame => mapFrameToOpenpose(frame, drawHands))
+export function mapToOpenpose(rawFrames: FrameData[], drawHands: boolean, drawFace: boolean = true): OpenPoseFrame[] {
+  return rawFrames.map(frame => mapFrameToOpenpose(frame, drawHands, drawFace))
 }

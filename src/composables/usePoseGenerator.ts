@@ -4,6 +4,7 @@ import type { SkeletonMode, DirectionPreset } from '../types/config'
 import { DIRECTION_CONFIGS } from '../types/config'
 import { cloneFrames, transformFrames } from '../core/pose-transformer'
 import { renderFrame } from '../renderers/renderer-factory'
+import type { RenderOptions } from '../renderers/renderer-factory'
 
 export interface DirectionResult {
   name: string
@@ -17,16 +18,11 @@ export function usePoseGenerator() {
   const isGenerating = ref(false)
   const progress = ref({ current: 0, total: 0, label: '' })
 
-  /**
-   * Generate preview. Keeps old frames visible while rendering new ones,
-   * then swaps atomically when complete.
-   * Automatically cancels stale generations if called again before finishing.
-   */
   async function generatePreview(
     parseResult: ParseResult,
     preset: DirectionPreset,
     mode: SkeletonMode,
-    drawHands: boolean,
+    opts: RenderOptions,
     scale: number,
     previewSize: number = 512,
   ) {
@@ -40,7 +36,7 @@ export function usePoseGenerator() {
 
     try {
       for (let idx = 0; idx < dirEntries.length; idx++) {
-        if (myId !== generationId) return // stale, abort silently
+        if (myId !== generationId) return
         const [dirName, yAngle] = dirEntries[idx]
         progress.value = { current: idx, total, label: dirName }
 
@@ -49,7 +45,7 @@ export function usePoseGenerator() {
 
         const canvases: HTMLCanvasElement[] = []
         for (const joints of fc) {
-          canvases.push(renderFrame(mode, joints, parseResult.bones, previewSize, previewSize, drawHands))
+          canvases.push(renderFrame(mode, joints, parseResult.bones, previewSize, previewSize, opts))
         }
 
         results.push({ name: dirName, frames: canvases })
@@ -57,7 +53,7 @@ export function usePoseGenerator() {
         await new Promise(r => setTimeout(r, 0))
       }
 
-      if (myId !== generationId) return // stale
+      if (myId !== generationId) return
       renderedDirections.value = results
       progress.value = { current: total, total, label: '完成' }
     } finally {
@@ -71,7 +67,7 @@ export function usePoseGenerator() {
     parseResult: ParseResult,
     preset: DirectionPreset,
     mode: SkeletonMode,
-    drawHands: boolean,
+    opts: RenderOptions,
     scale: number,
     width: number,
     height: number,
@@ -88,7 +84,7 @@ export function usePoseGenerator() {
 
       const canvases: HTMLCanvasElement[] = []
       for (let i = 0; i < fc.length; i++) {
-        canvases.push(renderFrame(mode, fc[i], parseResult.bones, width, height, drawHands))
+        canvases.push(renderFrame(mode, fc[i], parseResult.bones, width, height, opts))
         if (i % 5 === 0) {
           onProgress?.(idx * fc.length + i, dirEntries.length * fc.length, dirName)
           await new Promise(r => setTimeout(r, 0))

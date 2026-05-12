@@ -26,10 +26,13 @@ const HAND_EDGES: [number, number][] = [
   [0, 17], [17, 18], [18, 19], [19, 20],
 ]
 
-function drawBodypose(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[], H: number, W: number) {
+function drawBodypose(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[], H: number, W: number, xinsrScaling: boolean) {
   const stickwidth = 4
-  const maxSide = Math.max(H, W)
-  const stickScale = maxSide < 500 ? 1 : Math.min(2 + Math.floor(maxSide / 1000), 7)
+  let stickScale = 1
+  if (xinsrScaling) {
+    const maxSide = Math.max(H, W)
+    stickScale = maxSide < 500 ? 1 : Math.min(2 + Math.floor(maxSide / 1000), 7)
+  }
 
   for (let i = 0; i < LIMB_SEQ.length; i++) {
     const [k1Idx, k2Idx] = LIMB_SEQ[i]
@@ -39,7 +42,6 @@ function drawBodypose(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[], H: n
 
     const x1 = kp1[0], y1 = kp1[1]
     const x2 = kp2[0], y2 = kp2[1]
-    // controlnet_aux style: swapped midpoint
     const mX = (y1 + y2) / 2.0
     const mY = (x1 + x2) / 2.0
     const length = Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
@@ -61,10 +63,23 @@ function drawBodypose(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[], H: n
     fillConvexPoly(ctx, polygon, limbColor)
   }
 
+  const jointRadius = xinsrScaling ? 4 * stickScale : 4
   for (let i = 0; i < body.length; i++) {
     const kp = body[i]
     if (!kp) continue
-    fillCircle(ctx, Math.round(kp[0]), Math.round(kp[1]), 4 * stickScale, COLORS[i])
+    fillCircle(ctx, Math.round(kp[0]), Math.round(kp[1]), jointRadius, COLORS[i])
+  }
+}
+
+function drawFacepose(ctx: CanvasRenderingContext2D, face: (Vec3 | null)[] | null) {
+  if (!face) return
+  const eps = 0.01
+  for (const kp of face) {
+    if (!kp) continue
+    const x = Math.round(kp[0]), y = Math.round(kp[1])
+    if (x > eps && y > eps) {
+      fillCircle(ctx, x, y, 3, [255, 255, 255])
+    }
   }
 }
 
@@ -99,13 +114,18 @@ export function renderOpenposeFrame(
   width: number,
   height: number,
   drawHands: boolean,
+  drawFace: boolean = true,
+  xinsrScaling: boolean = false,
 ): HTMLCanvasElement {
   const [canvas, ctx] = createBlackCanvas(width, height)
 
-  drawBodypose(ctx, frame.body, height, width)
+  drawBodypose(ctx, frame.body, height, width, xinsrScaling)
   if (drawHands) {
     drawHandpose(ctx, frame.leftHand)
     drawHandpose(ctx, frame.rightHand)
+  }
+  if (drawFace) {
+    drawFacepose(ctx, frame.face)
   }
 
   return canvas

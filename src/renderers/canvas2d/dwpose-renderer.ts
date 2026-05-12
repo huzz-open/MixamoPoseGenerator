@@ -102,11 +102,24 @@ function drawHandposeWan(ctx: CanvasRenderingContext2D, hand: (Vec3 | null)[] | 
   }
 }
 
+function drawFaceposeWan(ctx: CanvasRenderingContext2D, face: (Vec3 | null)[] | null) {
+  if (!face) return
+  const eps = 0.01
+  for (const kp of face) {
+    if (!kp) continue
+    const x = Math.round(kp[0]), y = Math.round(kp[1])
+    if (x > eps && y > eps) {
+      fillCircle(ctx, x, y, 3, [255, 255, 255])
+    }
+  }
+}
+
 export function renderDwposeFrame(
   frame: OpenPoseFrame,
   width: number,
   height: number,
   drawHands: boolean,
+  drawFace: boolean = true,
 ): HTMLCanvasElement {
   const [canvas, ctx] = createBlackCanvas(width, height)
 
@@ -114,6 +127,9 @@ export function renderDwposeFrame(
   if (drawHands) {
     drawHandposeWan(ctx, frame.leftHand)
     drawHandposeWan(ctx, frame.rightHand)
+  }
+  if (drawFace) {
+    drawFaceposeWan(ctx, frame.face)
   }
 
   return canvas
