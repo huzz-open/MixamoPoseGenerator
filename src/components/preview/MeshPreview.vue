@@ -49,12 +49,13 @@ const errorMsg = ref('')
 const debugInfo = ref('')
 
 const showSkin = ref(true)
+const poseOpacity = ref(0.5)
+const skinHover = ref(false)
 const inPlace = ref(true)
 const showAxes = ref(false)
 const lockRotation = ref(true)
 const viewAngle = ref(0)
 const hasSkin = ref(false)
-const showPoseOverlay = ref(true)
 
 const isOrthoMode = computed(() => props.skeletonMode !== 'raw')
 
@@ -343,7 +344,7 @@ function loadFromXml(xml: string) {
     scene!.add(modelGroup)
 
     skeletonHelper = new THREE.SkeletonHelper(root)
-    skeletonHelper.visible = !showSkin.value
+    skeletonHelper.visible = !showSkin.value && !isOrthoMode.value
     scene!.add(skeletonHelper)
 
     if (gridHelper && scene) scene.remove(gridHelper)
@@ -378,12 +379,12 @@ function loadFromXml(xml: string) {
 }
 
 function applySkinVisibility() {
-  const canShowSkin = hasSkin.value && showSkin.value
+  const visible = hasSkin.value && showSkin.value
   for (const obj of meshObjects) {
-    obj.visible = canShowSkin
+    obj.visible = visible
   }
   if (skeletonHelper) {
-    skeletonHelper.visible = !canShowSkin && !isOrthoMode.value
+    skeletonHelper.visible = !visible && !isOrthoMode.value
   }
 }
 
@@ -416,7 +417,7 @@ function projectOpenPoseFrame(frame: OpenPoseFrame, cam: THREE.Camera, w: number
 
 function drawPoseOverlay() {
   const overlay = poseOverlayRef.value
-  if (!overlay || !isOrthoMode.value || !showPoseOverlay.value) {
+  if (!overlay || poseOpacity.value <= 0) {
     if (overlay) {
       const ctx = overlay.getContext('2d')
       if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height)
@@ -425,7 +426,7 @@ function drawPoseOverlay() {
   }
 
   const el = containerRef.value
-  const cam = orthoCamera
+  const cam = activeCamera()
   if (!el || !cam) return
 
   const w = el.clientWidth
@@ -455,8 +456,9 @@ function drawPoseOverlay() {
   const ctx = overlay.getContext('2d')
   if (!ctx) return
   ctx.clearRect(0, 0, w, h)
-  ctx.globalAlpha = 0.6
+  ctx.globalAlpha = poseOpacity.value
   ctx.drawImage(poseCanvas, 0, 0)
+  ctx.globalAlpha = 1
 }
 
 function animate() {
@@ -561,14 +563,9 @@ function switchCamera() {
   const cam = activeCamera()
   if (!cam || !controls || !renderer) return
   controls.object = cam
-  if (isOrthoMode.value) {
-    controls.enableRotate = false
-    controls.enablePan = false
-  } else {
-    controls.enableRotate = true
-    controls.enablePan = true
-    applyRotationLock()
-  }
+  controls.enableRotate = true
+  controls.enablePan = true
+  applyRotationLock()
   applySkinVisibility()
   fitToView()
 }
@@ -590,15 +587,34 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
       <div v-if="!daeXml && !loading" class="overlay">加载带皮肤的 DAE/ZIP 以预览 3D 模型</div>
       <div v-if="debugInfo" class="info-badge">{{ debugInfo }}</div>
 
-      <canvas v-if="isOrthoMode" ref="poseOverlayRef" class="pose-overlay" />
+      <canvas ref="poseOverlayRef" class="pose-overlay" />
 
       <div v-if="daeXml" class="viewport-toolbar">
-        <button
-          class="tb-btn" :class="{ active: showSkin, disabled: !hasSkin }"
-          :disabled="!hasSkin"
-          :title="hasSkin ? '显示/隐藏皮肤' : '当前文件无皮肤数据'"
-          @click="hasSkin && (showSkin = !showSkin)"
-        ><img :src="skinIcon" class="tb-icon" /></button>
+        <div
+          class="tb-skin-group"
+          @mouseenter="skinHover = true"
+          @mouseleave="skinHover = false"
+        >
+          <button
+            class="tb-btn" :class="{ active: showSkin, disabled: !hasSkin }"
+            :disabled="!hasSkin"
+            :title="hasSkin ? '显示/隐藏皮肤' : '当前文件无皮肤数据'"
+            @click="hasSkin && (showSkin = !showSkin)"
+          ><img :src="skinIcon" class="tb-icon" /></button>
+          <transition name="slider-fade">
+            <div v-if="skinHover && showSkin && hasSkin" class="tb-slider-popup">
+              <input
+                type="range"
+                class="tb-h-slider"
+                title="Pose 不透明度"
+                min="0" max="100" step="1"
+                :value="Math.round(poseOpacity * 100)"
+                @input="poseOpacity = parseInt(($event.target as HTMLInputElement).value) / 100"
+              />
+              <span class="tb-slider-val">{{ Math.round(poseOpacity * 100) }}</span>
+            </div>
+          </transition>
+        </div>
 
         <button
           class="tb-btn" :class="{ active: inPlace }"
@@ -607,7 +623,6 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
         ><img :src="inPlaceIcon" class="tb-icon" /></button>
 
         <button
-          v-if="!isOrthoMode"
           class="tb-btn" :class="{ active: lockRotation }"
           title="锁定垂直旋转：仅允许水平方向旋转相机，防止视角上下倾斜"
           @click="lockRotation = !lockRotation"
@@ -632,15 +647,6 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
           title="重置旋转：将相机恢复到水平视角"
           @click="resetRotation"
         ><img :src="resetIcon" class="tb-icon" /></button>
-
-        <template v-if="isOrthoMode">
-          <div class="tb-divider" />
-          <button
-            class="tb-btn" :class="{ active: showPoseOverlay }"
-            title="显示/隐藏 Pose 叠加层"
-            @click="showPoseOverlay = !showPoseOverlay"
-          ><span class="tb-text">P</span></button>
-        </template>
 
         <div class="tb-divider" />
 
@@ -790,11 +796,68 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
   margin: 2px auto;
 }
 
-.tb-text {
-  font-size: 12px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.85);
-  line-height: 1;
+.tb-skin-group {
+  position: relative;
+}
+
+.tb-slider-popup {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 4px;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+.tb-h-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.tb-h-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.tb-h-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.tb-slider-val {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 20px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.slider-fade-enter-active,
+.slider-fade-leave-active {
+  transition: opacity 0.15s, transform 0.15s;
+}
+.slider-fade-enter-from,
+.slider-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-4px);
 }
 
 .pose-overlay {
