@@ -1,5 +1,6 @@
 import { ref, readonly } from 'vue'
-import { parseDaeOrZip } from '../core/dae-parser'
+import JSZip from 'jszip'
+import { parseDae } from '../core/dae-parser'
 import type { ParseResult } from '../types/pose'
 
 export function useFileLoader() {
@@ -8,6 +9,7 @@ export function useFileLoader() {
   const fullFileName = ref('')
   const isLoading = ref(false)
   const error = ref('')
+  const daeXmlContent = ref<string | null>(null)
 
   async function loadFile(file: File) {
     isLoading.value = true
@@ -15,11 +17,23 @@ export function useFileLoader() {
     parseResult.value = null
     animationName.value = ''
     fullFileName.value = file.name
+    daeXmlContent.value = null
 
     try {
-      const result = await parseDaeOrZip(file)
+      let xmlContent: string
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(file)
+        const daeFile = Object.keys(zip.files).find(n => n.toLowerCase().endsWith('.dae'))
+        if (!daeFile) throw new Error('ZIP 中未找到 DAE 文件')
+        xmlContent = await zip.files[daeFile].async('string')
+      } else {
+        xmlContent = await file.text()
+      }
+
+      const result = parseDae(xmlContent)
       parseResult.value = result
       animationName.value = file.name.replace(/\.(dae|zip)$/i, '')
+      daeXmlContent.value = xmlContent
     } catch (e: any) {
       error.value = e.message || '文件解析失败'
       fullFileName.value = ''
@@ -34,6 +48,7 @@ export function useFileLoader() {
     fullFileName: readonly(fullFileName),
     isLoading: readonly(isLoading),
     error: readonly(error),
+    daeXmlContent: readonly(daeXmlContent),
     loadFile,
   }
 }

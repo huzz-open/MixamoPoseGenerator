@@ -214,3 +214,4 @@ export function mapFrameToOpenpose(joints: FrameData, drawHands: boolean, drawFa
 export function mapToOpenpose(rawFrames: FrameData[], drawHands: boolean, drawFace: boolean = true, faceScale: number = 0.55): OpenPoseFrame[] {
   return rawFrames.map(frame => mapFrameToOpenpose(frame, drawHands, drawFace, faceScale))
 }
+

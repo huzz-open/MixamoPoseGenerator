@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import prevFrameIcon from '../../assets/icon/pre-frame.svg'
+import nextFrameIcon from '../../assets/icon/next-frame.svg'
+import playIcon from '../../assets/icon/play.svg'
+import stopIcon from '../../assets/icon/stop.svg'
+
 defineProps<{
-  directions: string[]
-  currentDirection: number
   currentFrame: number
   frameCount: number
   isPlaying: boolean
@@ -9,44 +12,43 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:currentDirection': [value: number]
   'update:fps': [value: number]
   togglePlay: []
   prevFrame: []
   nextFrame: []
 }>()
+
+function onFpsInput(e: Event) {
+  const raw = parseInt((e.target as HTMLInputElement).value)
+  if (isNaN(raw)) return
+  emit('update:fps', Math.max(1, Math.min(160, raw)))
+}
 </script>
 
 <template>
   <div class="controls">
     <div class="controls-left">
-      <span class="label">视角:</span>
-      <select
-        :value="currentDirection"
-        @change="emit('update:currentDirection', parseInt(($event.target as HTMLSelectElement).value))"
-      >
-        <option v-for="(dir, idx) in directions" :key="idx" :value="idx">{{ dir }}</option>
-      </select>
-
-      <span class="separator" />
-
       <span class="label">FPS:</span>
       <input
         type="number"
         :value="fps"
         min="1"
-        max="60"
+        max="160"
         class="fps-input"
-        @input="emit('update:fps', parseInt(($event.target as HTMLInputElement).value) || 10)"
+        @input="onFpsInput($event)"
       />
     </div>
 
     <div class="controls-center">
-      <button class="ctrl-btn" title="上一帧" @click="emit('prevFrame')">⏮</button>
-      <button class="ctrl-btn play-btn" @click="emit('togglePlay')">
-        {{ isPlaying ? '⏸' : '▶' }}
+      <button class="ctrl-btn" title="上一帧" @click="emit('prevFrame')">
+        <img :src="prevFrameIcon" class="ctrl-icon" />
       </button>
-      <button class="ctrl-btn" title="下一帧" @click="emit('nextFrame')">⏭</button>
+      <button class="ctrl-btn" @click="emit('togglePlay')" :title="isPlaying ? '停止' : '播放'">
+        <img :src="isPlaying ? stopIcon : playIcon" class="ctrl-icon play-icon" />
+      </button>
+      <button class="ctrl-btn" title="下一帧" @click="emit('nextFrame')">
+        <img :src="nextFrameIcon" class="ctrl-icon" />
+      </button>
     </div>
 
     <div class="controls-right">
@@ -69,21 +71,6 @@ const emit = defineEmits<{
   gap: 6px;
 }
 .label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
-.separator {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-  margin: 0 4px;
-  flex-shrink: 0;
-}
-select {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  padding: 3px 6px;
-  font-size: 12px;
-}
 .fps-input {
   width: 44px;
   background: var(--bg-input);
@@ -94,17 +81,26 @@ select {
   font-size: 12px;
 }
 .ctrl-btn {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  padding: 4px 8px;
+  background: none;
+  border: none;
+  padding: 4px;
   cursor: pointer;
-  font-size: 12px;
-  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
-.ctrl-btn:hover { background: var(--bg-hover); }
-.play-btn { font-size: 14px; padding: 4px 12px; }
+.ctrl-btn:hover { opacity: 1; }
+.ctrl-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.play-icon {
+  width: 20px;
+  height: 20px;
+}
 .frame-info {
   font-size: 12px;
   color: var(--text-secondary);

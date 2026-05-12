@@ -1,15 +1,19 @@
 export type SkeletonMode = 'raw' | 'openpose' | 'dwpose'
 
-export type DirectionPreset = 'single' | 'two' | 'four' | 'eight'
-
 export type ExportFormat = 'png' | 'mp4'
 
 export type LoopMode = 'auto' | 'count' | 'duration'
 
-export interface DirectionConfig {
+export interface DirectionEntry {
   name: string
-  directions: Record<string, number>
+  angle: number
+}
+
+export interface DirectionPresetDef {
+  id: string
+  label: string
   icon: string
+  directions: DirectionEntry[]
 }
 
 export interface RenderConfig {
@@ -37,28 +41,53 @@ export interface ExportConfig {
   video: VideoExportConfig
 }
 
-export const DIRECTION_CONFIGS: Record<DirectionPreset, DirectionConfig> = {
-  single: {
-    name: '单方向',
-    directions: { side: 90 },
+export const DIRECTION_PRESETS: DirectionPresetDef[] = [
+  {
+    id: 'single',
+    label: '单方向',
     icon: '→',
+    directions: [{ name: 'right', angle: 90 }],
   },
-  two: {
-    name: '左右两方向',
-    directions: { right: 90, left: 270 },
+  {
+    id: 'two',
+    label: '左右',
     icon: '←→',
+    directions: [
+      { name: 'right', angle: 90 },
+      { name: 'left', angle: 270 },
+    ],
   },
-  four: {
-    name: '四方向',
-    directions: { up: 0, right: 90, down: 180, left: 270 },
+  {
+    id: 'four',
+    label: '四方向',
     icon: '✛',
+    directions: [
+      { name: 'up', angle: 0 },
+      { name: 'right', angle: 90 },
+      { name: 'down', angle: 180 },
+      { name: 'left', angle: 270 },
+    ],
   },
-  eight: {
-    name: '八方向',
-    directions: {
-      up: 0, up_right: 45, right: 90, down_right: 135,
-      down: 180, down_left: 225, left: 270, up_left: 315,
-    },
+  {
+    id: 'eight',
+    label: '八方向',
     icon: '✺',
+    directions: [
+      { name: 'up', angle: 0 },
+      { name: 'up_right', angle: 45 },
+      { name: 'right', angle: 90 },
+      { name: 'down_right', angle: 135 },
+      { name: 'down', angle: 180 },
+      { name: 'down_left', angle: 225 },
+      { name: 'left', angle: 270 },
+      { name: 'up_left', angle: 315 },
+    ],
   },
-}
+]
+
+export const DEFAULT_DIRECTIONS: DirectionEntry[] = [
+  { name: 'up', angle: 0 },
+  { name: 'right', angle: 90 },
+  { name: 'down', angle: 180 },
+  { name: 'left', angle: 270 },
+]

@@ -1,32 +1,30 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { DirectionPreset, SkeletonMode, LoopMode } from './types/config'
+import type { SkeletonMode, LoopMode, DirectionEntry } from './types/config'
 import type { ParseResult } from './types/pose'
-import { DIRECTION_CONFIGS } from './types/config'
+import { DEFAULT_DIRECTIONS } from './types/config'
 import { useFileLoader } from './composables/useFileLoader'
 import { usePoseGenerator } from './composables/usePoseGenerator'
 import { usePreview } from './composables/usePreview'
 import { useExport } from './composables/useExport'
-import { useLog } from './composables/useLog'
 import FileLoader from './components/config/FileLoader.vue'
 import ConfigPanel from './components/config/ConfigPanel.vue'
 import PreviewCanvas from './components/preview/PreviewCanvas.vue'
 import AnimationControls from './components/preview/AnimationControls.vue'
-import LogPanel from './components/log/LogPanel.vue'
+import MeshPreview from './components/preview/MeshPreview.vue'
 import ProgressBar from './components/export/ProgressBar.vue'
 import Toast from './components/Toast.vue'
 import { useToast } from './composables/useToast'
 
-const { parseResult, animationName, fullFileName, isLoading, error, loadFile } = useFileLoader()
+const { parseResult, animationName, fullFileName, isLoading, error, daeXmlContent, loadFile } = useFileLoader()
 const { renderedDirections, generatePreview, generateForExport } = usePoseGenerator()
 const { isExporting, exportProgress, exportAll } = useExport()
-const { entries: logEntries, log, clear: clearLog } = useLog()
 const { toast } = useToast()
 
 const preview = usePreview(() => renderedDirections.value as any[])
 
 // Config state
-const directionPreset = ref<DirectionPreset>('four')
+const activeDirections = ref<DirectionEntry[]>([...DEFAULT_DIRECTIONS])
 const skeletonMode = ref<SkeletonMode>('openpose')
 const drawHands = ref(true)
 const drawFace = ref(true)
@@ -42,16 +40,21 @@ const loopMode = ref<LoopMode>('auto')
 const loopCount = ref(4)
 const loopDuration = ref(3.5)
 
+const currentYAngle = computed(() => {
+  const dirs = renderedDirections.value
+  if (dirs.length === 0) return 0
+  const dirName = dirs[preview.currentDirection.value]?.name
+  if (!dirName) return 0
+  const entry = activeDirections.value.find(d => d.name === dirName)
+  return entry?.angle ?? 0
+})
+
 const renderOpts = computed(() => ({
   drawHands: drawHands.value,
   drawFace: drawFace.value,
   faceScale: faceScale.value,
   xinsrScaling: xinsrScaling.value,
 }))
-
-const directionNames = computed(() =>
-  renderedDirections.value.map(d => d.name)
-)
 
 const currentCanvas = computed((): HTMLCanvasElement | null => {
   const dirs = renderedDirections.value
@@ -69,20 +72,20 @@ const frameCount = computed(() => {
 
 watch(error, (e) => {
   if (e) {
-    log(e, 'error')
+    console.error(e)
     toast(e, 'error', 4000)
   }
 })
 
 // --- Auto-generate logic ---
 
-async function triggerPreview() {
-  if (!parseResult.value) return
-  const cfg = DIRECTION_CONFIGS[directionPreset.value]
-  log(`生成预览 (${cfg.name}, ${skeletonMode.value})`, 'info')
+async function triggerPreview(autoPlay = false) {
+  if (!parseResult.value || activeDirections.value.length === 0) return
+  const wasPlaying = preview.isPlaying.value
+  console.info(`生成预览 (${activeDirections.value.length}方向, ${skeletonMode.value})`)
   await generatePreview(
     parseResult.value as ParseResult,
-    directionPreset.value,
+    activeDirections.value,
     skeletonMode.value,
     renderOpts.value,
     scale.value,
@@ -90,19 +93,18 @@ async function triggerPreview() {
   if (renderedDirections.value.length > 0) {
     const dirs = renderedDirections.value
     const total = dirs.reduce((s, d) => s + d.frames.length, 0)
-    log(`预览就绪: ${dirs.length} 方向, ${total} 帧`, 'success')
+    console.info(`预览就绪: ${dirs.length} 方向, ${total} 帧`)
+    if (autoPlay || wasPlaying) preview.play()
   }
 }
 
-// Auto-generate after file loaded
 watch(parseResult, (result) => {
-  if (result) triggerPreview()
+  if (result) triggerPreview(true)
 })
 
-// Auto-regenerate on discrete config changes (immediate)
-watch([directionPreset, skeletonMode, drawHands, drawFace, faceScale, xinsrScaling], () => {
+watch([activeDirections, skeletonMode, drawHands, drawFace, faceScale, xinsrScaling], () => {
   if (parseResult.value) triggerPreview()
-})
+}, { deep: true })
 
 function onInvalidFile(fileName: string) {
   const ext = fileName.split('.').pop()?.toLowerCase() || '未知'
@@ -110,16 +112,16 @@ function onInvalidFile(fileName: string) {
 }
 
 async function onFileSelected(file: File) {
-  log(`加载文件: ${file.name}`, 'info')
+  console.info(`加载文件: ${file.name}`)
   await loadFile(file)
   if (parseResult.value) {
     const fileFps = parseResult.value.fps
     if (fileFps !== null) {
       videoFps.value = fileFps
       preview.fps.value = Math.min(fileFps, 30)
-      log(`解析成功: ${animationName.value} (${parseResult.value.frameCount} 帧, 检测到 ${fileFps} FPS)`, 'success')
+      console.info(`解析成功: ${animationName.value} (${parseResult.value.frameCount} 帧, 检测到 ${fileFps} FPS)`)
     } else {
-      log(`解析成功: ${animationName.value} (${parseResult.value.frameCount} 帧, 未检测到 FPS, 使用默认 ${videoFps.value})`, 'success')
+      console.info(`解析成功: ${animationName.value} (${parseResult.value.frameCount} 帧, 未检测到 FPS, 使用默认 ${videoFps.value})`)
     }
   }
 }
@@ -138,7 +140,7 @@ function computeTargetFrames(srcCount: number, fps: number): number {
 
 async function onExport() {
   if (renderedDirections.value.length === 0) {
-    log('请先生成预览', 'warning')
+    console.warn('请先生成预览')
     return
   }
 
@@ -146,20 +148,20 @@ async function onExport() {
   let mp4Dirs: any[] | undefined
 
   if (wantMp4) {
-    log('开始渲染高分辨率帧...', 'info')
+    console.info('开始渲染高分辨率帧...')
     mp4Dirs = await generateForExport(
       parseResult.value as ParseResult,
-      directionPreset.value,
+      activeDirections.value,
       skeletonMode.value,
       renderOpts.value,
       scale.value,
       videoWidth.value,
       videoHeight.value,
-      (cur, total, dir) => log(`渲染 ${dir}: ${cur}/${total}`, 'info'),
+      (cur, total, dir) => console.info(`渲染 ${dir}: ${cur}/${total}`),
     ) as any[]
   }
 
-  log('开始打包导出...', 'info')
+  console.info('开始打包导出...')
   await exportAll({
     png: exportPng.value,
     mp4: !!wantMp4,
@@ -171,7 +173,7 @@ async function onExport() {
     videoFps: videoFps.value,
     targetFrames: wantMp4 ? computeTargetFrames(parseResult.value!.frameCount, videoFps.value) : 0,
   })
-  log('导出完成', 'success')
+  console.info('导出完成')
 }
 </script>
 
@@ -194,7 +196,8 @@ async function onExport() {
         />
 
         <ConfigPanel
-          :direction-preset="directionPreset"
+          :directions="activeDirections"
+          :current-direction-index="preview.currentDirection.value"
           :skeleton-mode="skeletonMode"
           :draw-hands="drawHands"
           :draw-face="drawFace"
@@ -210,7 +213,8 @@ async function onExport() {
           :loop-duration="loopDuration"
           :has-preview="renderedDirections.length > 0"
           :is-exporting="isExporting"
-          @update:direction-preset="directionPreset = $event"
+          @update:directions="activeDirections = $event"
+          @select-direction="preview.setDirection($event)"
           @update:skeleton-mode="skeletonMode = $event"
           @update:draw-hands="drawHands = $event"
           @update:draw-face="drawFace = $event"
@@ -236,22 +240,34 @@ async function onExport() {
       </aside>
 
       <main class="main-area">
-        <PreviewCanvas :canvas="currentCanvas" />
-        <AnimationControls
-          v-if="renderedDirections.length > 0"
-          :directions="directionNames"
-          :current-direction="preview.currentDirection.value"
+        <MeshPreview
+          v-if="daeXmlContent"
+          :dae-xml="daeXmlContent"
+          :y-angle="currentYAngle"
+          :playing="preview.isPlaying.value"
           :current-frame="preview.currentFrame.value"
           :frame-count="frameCount"
-          :is-playing="preview.isPlaying.value"
           :fps="preview.fps.value"
-          @update:current-direction="preview.setDirection($event)"
-          @update:fps="preview.fps.value = $event"
           @toggle-play="preview.togglePlay()"
           @prev-frame="preview.prevFrame()"
           @next-frame="preview.nextFrame()"
+          @seek-frame="preview.currentFrame.value = $event"
+          @update:fps="preview.fps.value = $event"
         />
-        <LogPanel :entries="logEntries" @clear="clearLog" />
+        <template v-else>
+          <PreviewCanvas :canvas="currentCanvas" />
+          <AnimationControls
+            v-if="renderedDirections.length > 0"
+            :current-frame="preview.currentFrame.value"
+            :frame-count="frameCount"
+            :is-playing="preview.isPlaying.value"
+            :fps="preview.fps.value"
+            @update:fps="preview.fps.value = $event"
+            @toggle-play="preview.togglePlay()"
+            @prev-frame="preview.prevFrame()"
+            @next-frame="preview.nextFrame()"
+          />
+        </template>
       </main>
     </div>
   </div>

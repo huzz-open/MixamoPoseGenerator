@@ -1,4 +1,4 @@
-import { ref, readonly, onUnmounted, watch } from 'vue'
+import { ref, onUnmounted, watch } from 'vue'
 import type { DirectionResult } from './usePoseGenerator'
 
 export function usePreview(directions: () => DirectionResult[]) {
@@ -6,8 +6,7 @@ export function usePreview(directions: () => DirectionResult[]) {
   const currentFrame = ref(0)
   const isPlaying = ref(false)
   const fps = ref(10)
-  let animHandle: number | null = null
-  let lastTime = 0
+  let intervalId: ReturnType<typeof setInterval> | null = null
 
   function frameCount(): number {
     const dirs = directions()
@@ -42,29 +41,29 @@ export function usePreview(directions: () => DirectionResult[]) {
     }
   }
 
-  function tick(now: number) {
-    if (!isPlaying.value) return
-    const interval = 1000 / fps.value
-    if (now - lastTime >= interval) {
-      lastTime = now
-      nextFrame()
+  function stopInterval() {
+    if (intervalId !== null) {
+      clearInterval(intervalId)
+      intervalId = null
     }
-    animHandle = requestAnimationFrame(tick)
+  }
+
+  function startInterval() {
+    stopInterval()
+    intervalId = setInterval(() => {
+      nextFrame()
+    }, 1000 / fps.value)
   }
 
   function play() {
     if (isPlaying.value) return
     isPlaying.value = true
-    lastTime = performance.now()
-    animHandle = requestAnimationFrame(tick)
+    startInterval()
   }
 
   function pause() {
     isPlaying.value = false
-    if (animHandle !== null) {
-      cancelAnimationFrame(animHandle)
-      animHandle = null
-    }
+    stopInterval()
   }
 
   function togglePlay() {
@@ -72,19 +71,17 @@ export function usePreview(directions: () => DirectionResult[]) {
     else play()
   }
 
-  /**
-   * When directions data updates, preserve play state.
-   * Only clamp indices to valid range; don't pause or reset.
-   */
+  watch(fps, () => {
+    if (isPlaying.value) startInterval()
+  })
+
   watch(directions, (newDirs) => {
     if (newDirs.length === 0) return
 
-    // Clamp direction index
     if (currentDirection.value >= newDirs.length) {
       currentDirection.value = 0
     }
 
-    // Clamp frame index
     const dir = newDirs[currentDirection.value]
     if (dir && dir.frames.length > 0) {
       if (currentFrame.value >= dir.frames.length) {
@@ -93,9 +90,6 @@ export function usePreview(directions: () => DirectionResult[]) {
     } else {
       currentFrame.value = 0
     }
-
-    // If was playing and got paused externally, auto-resume is already handled
-    // because tick loop checks isPlaying and continues
   })
 
   onUnmounted(() => {
@@ -104,8 +98,8 @@ export function usePreview(directions: () => DirectionResult[]) {
 
   return {
     currentDirection,
-    currentFrame: readonly(currentFrame),
-    isPlaying: readonly(isPlaying),
+    currentFrame,
+    isPlaying,
     fps,
     frameCount,
     currentCanvas,

@@ -1,7 +1,6 @@
 import { ref, readonly } from 'vue'
 import type { ParseResult } from '../types/pose'
-import type { SkeletonMode, DirectionPreset } from '../types/config'
-import { DIRECTION_CONFIGS } from '../types/config'
+import type { SkeletonMode, DirectionEntry } from '../types/config'
 import { cloneFrames, transformFrames } from '../core/pose-transformer'
 import { renderFrame } from '../renderers/renderer-factory'
 import type { RenderOptions } from '../renderers/renderer-factory'
@@ -20,7 +19,7 @@ export function usePoseGenerator() {
 
   async function generatePreview(
     parseResult: ParseResult,
-    preset: DirectionPreset,
+    directions: DirectionEntry[],
     mode: SkeletonMode,
     opts: RenderOptions,
     scale: number,
@@ -29,15 +28,13 @@ export function usePoseGenerator() {
     const myId = ++generationId
     isGenerating.value = true
 
-    const directions = DIRECTION_CONFIGS[preset].directions
-    const dirEntries = Object.entries(directions)
-    const total = dirEntries.length
+    const total = directions.length
     const results: DirectionResult[] = []
 
     try {
-      for (let idx = 0; idx < dirEntries.length; idx++) {
+      for (let idx = 0; idx < directions.length; idx++) {
         if (myId !== generationId) return
-        const [dirName, yAngle] = dirEntries[idx]
+        const { name: dirName, angle: yAngle } = directions[idx]
         progress.value = { current: idx, total, label: dirName }
 
         const fc = cloneFrames(parseResult.frames)
@@ -65,7 +62,7 @@ export function usePoseGenerator() {
 
   async function generateForExport(
     parseResult: ParseResult,
-    preset: DirectionPreset,
+    directions: DirectionEntry[],
     mode: SkeletonMode,
     opts: RenderOptions,
     scale: number,
@@ -73,12 +70,10 @@ export function usePoseGenerator() {
     height: number,
     onProgress?: (current: number, total: number, dir: string) => void,
   ): Promise<DirectionResult[]> {
-    const directions = DIRECTION_CONFIGS[preset].directions
-    const dirEntries = Object.entries(directions)
     const results: DirectionResult[] = []
 
-    for (let idx = 0; idx < dirEntries.length; idx++) {
-      const [dirName, yAngle] = dirEntries[idx]
+    for (let idx = 0; idx < directions.length; idx++) {
+      const { name: dirName, angle: yAngle } = directions[idx]
       const fc = cloneFrames(parseResult.frames)
       transformFrames(fc, width, height, [0, yAngle, 0], scale)
 
@@ -86,7 +81,7 @@ export function usePoseGenerator() {
       for (let i = 0; i < fc.length; i++) {
         canvases.push(renderFrame(mode, fc[i], parseResult.bones, width, height, opts))
         if (i % 5 === 0) {
-          onProgress?.(idx * fc.length + i, dirEntries.length * fc.length, dirName)
+          onProgress?.(idx * fc.length + i, directions.length * fc.length, dirName)
           await new Promise(r => setTimeout(r, 0))
         }
       }

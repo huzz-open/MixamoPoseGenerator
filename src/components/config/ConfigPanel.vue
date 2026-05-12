@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import type { DirectionPreset, SkeletonMode, LoopMode } from '../../types/config'
-import { DIRECTION_CONFIGS } from '../../types/config'
+import { ref } from 'vue'
+import type { SkeletonMode, LoopMode, DirectionEntry, DirectionPresetDef } from '../../types/config'
+import { DIRECTION_PRESETS } from '../../types/config'
+import { useToast } from '../../composables/useToast'
+import addIcon from '../../assets/icon/add.svg'
+import clearIcon from '../../assets/icon/clear.svg'
+
+const { toast } = useToast()
 
 const props = defineProps<{
-  directionPreset: DirectionPreset
+  directions: DirectionEntry[]
+  currentDirectionIndex: number
   skeletonMode: SkeletonMode
   drawHands: boolean
   drawFace: boolean
@@ -22,7 +29,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:directionPreset': [value: DirectionPreset]
+  'update:directions': [value: DirectionEntry[]]
+  selectDirection: [index: number]
   'update:skeletonMode': [value: SkeletonMode]
   'update:drawHands': [value: boolean]
   'update:drawFace': [value: boolean]
@@ -39,29 +47,105 @@ const emit = defineEmits<{
   export: []
 }>()
 
-const dirPresets = Object.entries(DIRECTION_CONFIGS) as [DirectionPreset, typeof DIRECTION_CONFIGS[DirectionPreset]][]
+const newDirName = ref('')
+const newDirAngle = ref('')
 
 const skeletonModes: { value: SkeletonMode; label: string; desc: string }[] = [
   { value: 'raw', label: '原始骨架', desc: '' },
   { value: 'openpose', label: 'OpenPose', desc: 'ControlNet / Wan-Fun' },
   { value: 'dwpose', label: 'DWPose', desc: 'Wan 2.1/2.2 Animate' },
 ]
+
+function applyPreset(preset: DirectionPresetDef) {
+  const existing = new Set(props.directions.map(d => d.angle))
+  const toAdd = preset.directions.filter(pd => !existing.has(pd.angle))
+  if (toAdd.length === 0) return
+  emit('update:directions', [...props.directions, ...toAdd].sort((a, b) => a.angle - b.angle))
+}
+
+function removeDirection(idx: number) {
+  const next = [...props.directions]
+  next.splice(idx, 1)
+  emit('update:directions', next)
+}
+
+function clearAllDirections() {
+  emit('update:directions', [])
+}
+
+function addCustomDirection() {
+  const raw = Number(newDirAngle.value)
+  if (isNaN(raw) || raw < 0 || raw > 359) {
+    toast('请输入 0~359 之间的角度', 'warning')
+    return
+  }
+  const angle = Math.round(raw)
+  const dup = props.directions.find(d => d.angle === angle)
+  if (dup) {
+    toast(`角度 ${angle}° 已存在 (${dup.name})，跳过添加`, 'warning')
+    return
+  }
+  const name = newDirName.value.trim() || `${angle}`
+  emit('update:directions', [...props.directions, { name, angle }].sort((a, b) => a.angle - b.angle))
+  newDirName.value = ''
+  newDirAngle.value = ''
+}
 </script>
 
 <template>
   <div class="config-panel">
     <section>
       <h3>方向</h3>
-      <div class="radio-group">
-        <label v-for="[key, cfg] in dirPresets" :key="key" class="radio-label">
-          <input
-            type="radio"
-            :value="key"
-            :checked="directionPreset === key"
-            @change="emit('update:directionPreset', key)"
-          />
-          <span>{{ cfg.icon }} {{ cfg.name }} ({{ Object.keys(cfg.directions).length }}方向)</span>
-        </label>
+      <div class="preset-row">
+        <button
+          v-for="preset in DIRECTION_PRESETS"
+          :key="preset.id"
+          class="preset-btn"
+          @click="applyPreset(preset)"
+        >{{ preset.icon }} {{ preset.label }}</button>
+      </div>
+
+      <div class="dir-list-container">
+        <div v-if="directions.length > 0" class="dir-list">
+          <div
+            v-for="(dir, idx) in directions"
+            :key="dir.angle"
+            class="dir-item"
+            :class="{ 'dir-active': idx === currentDirectionIndex }"
+            @click="emit('selectDirection', idx)"
+          >
+            <span class="dir-angle">{{ dir.angle }}°</span>
+            <span class="dir-name">{{ dir.name }}</span>
+            <button class="dir-remove" @click.stop="removeDirection(idx)" title="移除">×</button>
+          </div>
+        </div>
+        <div v-else class="dir-empty">未选择任何方向</div>
+      </div>
+
+      <div class="dir-add-row">
+        <input
+          v-model="newDirAngle"
+          type="text"
+          inputmode="numeric"
+          placeholder="角度"
+          class="dir-input"
+          style="width:48px; text-align:center"
+          @keyup.enter="addCustomDirection"
+        />
+        <span class="dir-unit">°</span>
+        <input
+          v-model="newDirName"
+          placeholder="名称(可选)"
+          class="dir-input"
+          style="flex:1"
+          @keyup.enter="addCustomDirection"
+        />
+        <button class="dir-add-btn" @click="addCustomDirection" title="添加方向">
+          <img :src="addIcon" alt="添加" class="dir-add-icon" />
+        </button>
+        <button class="dir-clear-btn" @click="clearAllDirections" title="清除全部">
+          <img :src="clearIcon" alt="清除" class="dir-clear-icon" />
+        </button>
       </div>
     </section>
 
@@ -205,6 +289,161 @@ const skeletonModes: { value: SkeletonMode; label: string; desc: string }[] = [
 section { display: flex; flex-direction: column; gap: 6px; }
 h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* Direction presets */
+.preset-row {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.preset-row::-webkit-scrollbar { display: none; }
+.preset-btn {
+  flex: 1 1 0;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--accent, #4a9eff);
+  border: 1px solid var(--accent, #4a9eff);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  white-space: nowrap;
+  text-align: center;
+}
+.preset-btn:hover {
+  filter: brightness(1.15);
+}
+.preset-btn:active {
+  filter: brightness(0.9);
+}
+
+/* Direction list container */
+.dir-list-container {
+  height: 88px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.dir-list-container:hover {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+.dir-list-container::-webkit-scrollbar { width: 0; background: transparent; }
+.dir-list-container:hover::-webkit-scrollbar { width: 4px; }
+.dir-list-container::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+.dir-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0;
+}
+.dir-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px 2px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dir-item:hover {
+  border-color: var(--accent, #4a9eff);
+}
+.dir-item.dir-active {
+  background: rgba(74, 158, 255, 0.15);
+  border-color: var(--accent, #4a9eff);
+}
+.dir-name { color: var(--text-primary); font-weight: 500; }
+.dir-angle { color: var(--text-secondary); }
+.dir-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.dir-remove:hover { opacity: 1; color: #ff6b6b; }
+.dir-empty {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Add direction */
+.dir-add-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+.dir-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.dir-unit {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.dir-add-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.dir-add-btn:hover { opacity: 1; }
+.dir-add-icon {
+  width: 18px;
+  height: 18px;
+}
+.dir-clear-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.dir-clear-btn:hover { opacity: 1; }
+.dir-clear-icon {
+  width: 18px;
+  height: 18px;
+}
+
 .radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 3px; padding-left: 4px; }
 .radio-group.small { font-size: 12px; }
 .radio-label, .checkbox-label {
@@ -239,10 +478,6 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
   font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary {
-  background: var(--accent); color: #fff;
-}
-.btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 .btn-accent {
   background: var(--success); color: #fff;
 }
