@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import type { SkeletonMode } from '../../types/config'
+import type { FrameData, Vec3, OpenPoseFrame } from '../../types/pose'
+import { mapFrameToOpenpose } from '../../core/openpose-mapper'
+import { renderOpFrame } from '../../renderers/renderer-factory'
 
 import skinIcon from '../../assets/icon/skin.svg'
 import inPlaceIcon from '../../assets/icon/in-place.svg'
@@ -22,6 +26,12 @@ const props = defineProps<{
   currentFrame: number
   frameCount: number
   fps: number
+  skeletonMode: SkeletonMode
+  poseCanvas: HTMLCanvasElement | null
+  drawHands: boolean
+  drawFace: boolean
+  faceScale: number
+  xinsrScaling: boolean
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +43,7 @@ const emit = defineEmits<{
 }>()
 
 const containerRef = ref<HTMLDivElement>()
+const poseOverlayRef = ref<HTMLCanvasElement>()
 const loading = ref(false)
 const errorMsg = ref('')
 const debugInfo = ref('')
@@ -42,10 +53,15 @@ const inPlace = ref(true)
 const showAxes = ref(false)
 const lockRotation = ref(true)
 const viewAngle = ref(0)
+const hasSkin = ref(false)
+const showPoseOverlay = ref(true)
+
+const isOrthoMode = computed(() => props.skeletonMode !== 'raw')
 
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
+let perspCamera: THREE.PerspectiveCamera | null = null
+let orthoCamera: THREE.OrthographicCamera | null = null
 let controls: OrbitControls | null = null
 let mixer: THREE.AnimationMixer | null = null
 let activeAction: THREE.AnimationAction | null = null
@@ -60,6 +76,11 @@ let animId = 0
 let modelHeight = 1
 let hipsRoot: THREE.Bone | null = null
 let meshObjects: THREE.Object3D[] = []
+let modelRoot: THREE.Object3D | null = null
+
+function activeCamera(): THREE.Camera | null {
+  return isOrthoMode.value ? orthoCamera : perspCamera
+}
 
 function updateViewAngle() {
   if (!controls) return
@@ -69,6 +90,11 @@ function updateViewAngle() {
 
 function applyRotationLock() {
   if (!controls) return
+  if (isOrthoMode.value) {
+    controls.minPolarAngle = Math.PI / 2
+    controls.maxPolarAngle = Math.PI / 2
+    return
+  }
   if (lockRotation.value) {
     const polar = controls.getPolarAngle()
     controls.minPolarAngle = polar
@@ -86,15 +112,23 @@ function initScene() {
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x1a1a1a)
 
-  camera = new THREE.PerspectiveCamera(35, el.clientWidth / el.clientHeight, 0.001, 10000)
-  camera.position.set(0, 1, 4)
+  const aspect = el.clientWidth / el.clientHeight
+  perspCamera = new THREE.PerspectiveCamera(35, aspect, 0.001, 10000)
+  perspCamera.position.set(0, 1, 4)
+
+  const halfH = 1
+  orthoCamera = new THREE.OrthographicCamera(
+    -halfH * aspect, halfH * aspect, halfH, -halfH, 0.001, 10000,
+  )
+  orthoCamera.position.set(0, 0.5, 5)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(el.clientWidth, el.clientHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   el.appendChild(renderer.domElement)
 
-  controls = new OrbitControls(camera, renderer.domElement)
+  const cam = activeCamera()!
+  controls = new OrbitControls(cam, renderer.domElement)
   controls.target.set(0, 0.8, 0)
   controls.enableDamping = true
   controls.dampingFactor = 0.1
@@ -140,35 +174,56 @@ function clearModel() {
   clipDuration = 0
   hipsRoot = null
   meshObjects = []
+  modelRoot = null
+  hasSkin.value = false
   debugInfo.value = ''
 }
 
 function fitToView() {
-  if (!camera || !controls) return
+  const cam = activeCamera()
+  if (!cam || !controls) return
   const h = modelHeight
-  const fovRad = camera.fov * Math.PI / 180
-  const dist = (h * 0.6) / Math.tan(fovRad / 2)
-  camera.position.set(0, h * 0.5, dist)
-  controls.target.set(0, h * 0.45, 0)
-  camera.near = h * 0.01
-  camera.far = h * 200
-  camera.updateProjectionMatrix()
+
+  if (cam instanceof THREE.PerspectiveCamera) {
+    const fovRad = cam.fov * Math.PI / 180
+    const dist = (h * 0.6) / Math.tan(fovRad / 2)
+    cam.position.set(0, h * 0.5, dist)
+    controls.target.set(0, h * 0.45, 0)
+    cam.near = h * 0.01
+    cam.far = h * 200
+    cam.updateProjectionMatrix()
+  } else if (cam instanceof THREE.OrthographicCamera) {
+    const el = containerRef.value
+    const aspect = el ? el.clientWidth / el.clientHeight : 1
+    const halfH = h * 0.55
+    cam.left = -halfH * aspect
+    cam.right = halfH * aspect
+    cam.top = halfH
+    cam.bottom = -halfH
+    cam.near = 0.001
+    cam.far = h * 200
+    cam.position.set(0, h * 0.5, h * 2)
+    controls.target.set(0, h * 0.5, 0)
+    cam.updateProjectionMatrix()
+  }
+
   controls.update()
   applyRotationLock()
   updateViewAngle()
 }
 
 function resetRotation() {
-  if (!camera || !controls) return
-  const dist = camera.position.distanceTo(controls.target)
+  const cam = activeCamera()
+  if (!cam || !controls) return
+  const dist = cam.position.distanceTo(controls.target)
   const azimuth = controls.getAzimuthalAngle()
   const targetY = controls.target.y
-  camera.position.set(
+  cam.position.set(
     controls.target.x + dist * Math.sin(azimuth),
     targetY,
     controls.target.z + dist * Math.cos(azimuth),
   )
-  camera.up.set(0, 1, 0)
+  cam.up.set(0, 1, 0)
   controls.update()
   applyRotationLock()
   updateViewAngle()
@@ -269,8 +324,10 @@ function loadFromXml(xml: string) {
 
     modelHeight = size.y > 0.001 ? size.y : 1
 
+    hasSkin.value = (meshCount + skinnedCount) > 0
     debugInfo.value = `网格: ${meshCount + skinnedCount} | 顶点: ${vertexCount} | 骨骼: ${boneCount}`
 
+    modelRoot = root
     modelGroup = new THREE.Group()
     modelGroup.add(root)
 
@@ -321,17 +378,91 @@ function loadFromXml(xml: string) {
 }
 
 function applySkinVisibility() {
+  const canShowSkin = hasSkin.value && showSkin.value
   for (const obj of meshObjects) {
-    obj.visible = showSkin.value
+    obj.visible = canShowSkin
   }
   if (skeletonHelper) {
-    skeletonHelper.visible = !showSkin.value
+    skeletonHelper.visible = !canShowSkin && !isOrthoMode.value
   }
+}
+
+function getBoneFrameData(): FrameData | null {
+  if (!modelRoot) return null
+  const frame: FrameData = new Map()
+  const tmpVec = new THREE.Vector3()
+  modelRoot.traverse((obj) => {
+    if ((obj as THREE.Bone).isBone) {
+      obj.getWorldPosition(tmpVec)
+      frame.set(obj.name, [tmpVec.x, tmpVec.y, tmpVec.z])
+    }
+  })
+  return frame.size > 0 ? frame : null
+}
+
+function projectOpenPoseFrame(frame: OpenPoseFrame, cam: THREE.Camera, w: number, h: number): OpenPoseFrame {
+  const proj = (p: Vec3 | null): Vec3 | null => {
+    if (!p) return null
+    const v = new THREE.Vector3(p[0], p[1], p[2]).project(cam)
+    return [(v.x + 1) / 2 * w, (1 - v.y) / 2 * h, 0]
+  }
+  return {
+    body: frame.body.map(proj),
+    leftHand: frame.leftHand?.map(proj) ?? null,
+    rightHand: frame.rightHand?.map(proj) ?? null,
+    face: frame.face?.map(proj) ?? null,
+  }
+}
+
+function drawPoseOverlay() {
+  const overlay = poseOverlayRef.value
+  if (!overlay || !isOrthoMode.value || !showPoseOverlay.value) {
+    if (overlay) {
+      const ctx = overlay.getContext('2d')
+      if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height)
+    }
+    return
+  }
+
+  const el = containerRef.value
+  const cam = orthoCamera
+  if (!el || !cam) return
+
+  const w = el.clientWidth
+  const h = el.clientHeight
+  if (overlay.width !== w) overlay.width = w
+  if (overlay.height !== h) overlay.height = h
+
+  const boneData = getBoneFrameData()
+  if (!boneData) {
+    const ctx = overlay.getContext('2d')
+    if (ctx) ctx.clearRect(0, 0, w, h)
+    return
+  }
+
+  cam.updateMatrixWorld()
+  const opFrame3D = mapFrameToOpenpose(boneData, props.drawHands, props.drawFace, props.faceScale)
+  const opFrame2D = projectOpenPoseFrame(opFrame3D, cam, w, h)
+
+  const mode = props.skeletonMode === 'raw' ? 'openpose' : props.skeletonMode
+  const poseCanvas = renderOpFrame(mode, opFrame2D, w, h, {
+    drawHands: props.drawHands,
+    drawFace: props.drawFace,
+    faceScale: props.faceScale,
+    xinsrScaling: props.xinsrScaling,
+  })
+
+  const ctx = overlay.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, w, h)
+  ctx.globalAlpha = 0.6
+  ctx.drawImage(poseCanvas, 0, 0)
 }
 
 function animate() {
   animId = requestAnimationFrame(animate)
-  if (!renderer || !scene || !camera) return
+  const cam = activeCamera()
+  if (!renderer || !scene || !cam) return
 
   const now = performance.now()
   const delta = (now - lastTime) / 1000
@@ -345,17 +476,28 @@ function animate() {
     }
   }
   controls?.update()
-  renderer.render(scene, camera)
+  renderer.render(scene, cam)
+  drawPoseOverlay()
 }
 
 function onResize() {
   const el = containerRef.value
-  if (!el || !renderer || !camera) return
+  if (!el || !renderer) return
   const w = el.clientWidth
   const h = el.clientHeight
   if (w === 0 || h === 0) return
-  camera.aspect = w / h
-  camera.updateProjectionMatrix()
+
+  if (perspCamera) {
+    perspCamera.aspect = w / h
+    perspCamera.updateProjectionMatrix()
+  }
+  if (orthoCamera) {
+    const halfH = (orthoCamera.top - orthoCamera.bottom) / 2
+    const aspect = w / h
+    orthoCamera.left = -halfH * aspect
+    orthoCamera.right = halfH * aspect
+    orthoCamera.updateProjectionMatrix()
+  }
   renderer.setSize(w, h)
 }
 
@@ -376,6 +518,8 @@ onUnmounted(() => {
   clearModel()
   controls?.dispose()
   renderer?.dispose()
+  perspCamera = null
+  orthoCamera = null
   if (renderer && containerRef.value?.contains(renderer.domElement)) {
     containerRef.value.removeChild(renderer.domElement)
   }
@@ -412,6 +556,30 @@ watch(lockRotation, () => {
 watch(() => props.fps, () => {
   updateTimeScale()
 })
+
+function switchCamera() {
+  const cam = activeCamera()
+  if (!cam || !controls || !renderer) return
+  controls.object = cam
+  if (isOrthoMode.value) {
+    controls.enableRotate = false
+    controls.enablePan = false
+  } else {
+    controls.enableRotate = true
+    controls.enablePan = true
+    applyRotationLock()
+  }
+  applySkinVisibility()
+  fitToView()
+}
+
+watch(isOrthoMode, () => {
+  switchCamera()
+})
+
+watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, () => props.faceScale, () => props.xinsrScaling], () => {
+  drawPoseOverlay()
+})
 </script>
 
 <template>
@@ -422,11 +590,14 @@ watch(() => props.fps, () => {
       <div v-if="!daeXml && !loading" class="overlay">加载带皮肤的 DAE/ZIP 以预览 3D 模型</div>
       <div v-if="debugInfo" class="info-badge">{{ debugInfo }}</div>
 
+      <canvas v-if="isOrthoMode" ref="poseOverlayRef" class="pose-overlay" />
+
       <div v-if="daeXml" class="viewport-toolbar">
         <button
-          class="tb-btn" :class="{ active: showSkin }"
-          title="显示/隐藏皮肤"
-          @click="showSkin = !showSkin"
+          class="tb-btn" :class="{ active: showSkin, disabled: !hasSkin }"
+          :disabled="!hasSkin"
+          :title="hasSkin ? '显示/隐藏皮肤' : '当前文件无皮肤数据'"
+          @click="hasSkin && (showSkin = !showSkin)"
         ><img :src="skinIcon" class="tb-icon" /></button>
 
         <button
@@ -436,6 +607,7 @@ watch(() => props.fps, () => {
         ><img :src="inPlaceIcon" class="tb-icon" /></button>
 
         <button
+          v-if="!isOrthoMode"
           class="tb-btn" :class="{ active: lockRotation }"
           title="锁定垂直旋转：仅允许水平方向旋转相机，防止视角上下倾斜"
           @click="lockRotation = !lockRotation"
@@ -460,6 +632,15 @@ watch(() => props.fps, () => {
           title="重置旋转：将相机恢复到水平视角"
           @click="resetRotation"
         ><img :src="resetIcon" class="tb-icon" /></button>
+
+        <template v-if="isOrthoMode">
+          <div class="tb-divider" />
+          <button
+            class="tb-btn" :class="{ active: showPoseOverlay }"
+            title="显示/隐藏 Pose 叠加层"
+            @click="showPoseOverlay = !showPoseOverlay"
+          ><span class="tb-text">P</span></button>
+        </template>
 
         <div class="tb-divider" />
 
@@ -586,6 +767,14 @@ watch(() => props.fps, () => {
 .tb-btn.active:hover {
   background: rgba(100, 160, 255, 0.35);
 }
+.tb-btn.disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.tb-btn.disabled:hover {
+  background: transparent;
+  opacity: 0.25;
+}
 
 .tb-icon {
   width: 18px;
@@ -599,6 +788,22 @@ watch(() => props.fps, () => {
   height: 1px;
   background: rgba(255, 255, 255, 0.15);
   margin: 2px auto;
+}
+
+.tb-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1;
+}
+
+.pose-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .tb-angle {
