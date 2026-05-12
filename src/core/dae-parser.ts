@@ -98,11 +98,15 @@ export function parseDae(xmlContent: string): ParseResult {
   const doc = parser.parseFromString(xmlContent, 'text/xml')
   const root = doc.documentElement
 
+  if (root.tagName === 'parsererror' || root.querySelector('parsererror')) {
+    throw new Error('无效的文件：内容不是有效的 XML/DAE 格式')
+  }
+
   const visualScene = getByTag(root, 'visual_scene')[0]
   const animData = parseAnimationData(root)
 
   if (!visualScene || animData.size === 0) {
-    throw new Error('Visual scene or animation data not found in DAE file.')
+    throw new Error('无效的 DAE 文件：未找到场景或动画数据')
   }
 
   const firstEntry = animData.values().next().value as AnimEntry
@@ -165,7 +169,7 @@ export function parseDae(xmlContent: string): ParseResult {
   const identity = identityMat4()
   for (let t = 0; t < numFrames; t++) {
     const hipsNode = findHipsNode(visualScene)
-    if (!hipsNode) throw new Error('mixamorig_Hips node not found.')
+    if (!hipsNode) throw new Error('无效的 DAE 文件：未找到 Mixamo 骨骼节点 (mixamorig_Hips)')
     parseJoint(hipsNode, identity, t, null)
     bonesCollected = true
   }
@@ -184,7 +188,12 @@ export function parseDae(xmlContent: string): ParseResult {
 
 export async function parseDaeOrZip(file: File): Promise<ParseResult> {
   if (file.name.toLowerCase().endsWith('.zip')) {
-    const zip = await JSZip.loadAsync(file)
+    let zip: JSZip
+    try {
+      zip = await JSZip.loadAsync(file)
+    } catch {
+      throw new Error('无效的 ZIP 文件：无法解压')
+    }
     const daeFile = Object.keys(zip.files).find(n => n.toLowerCase().endsWith('.dae'))
     if (!daeFile) throw new Error('ZIP 中未找到 DAE 文件')
     const content = await zip.files[daeFile].async('string')

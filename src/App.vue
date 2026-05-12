@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { DirectionPreset, SkeletonMode, ExportFormat, LoopMode } from './types/config'
+import type { DirectionPreset, SkeletonMode, LoopMode } from './types/config'
 import type { ParseResult } from './types/pose'
 import { DIRECTION_CONFIGS } from './types/config'
 import { useFileLoader } from './composables/useFileLoader'
@@ -14,11 +14,14 @@ import PreviewCanvas from './components/preview/PreviewCanvas.vue'
 import AnimationControls from './components/preview/AnimationControls.vue'
 import LogPanel from './components/log/LogPanel.vue'
 import ProgressBar from './components/export/ProgressBar.vue'
+import Toast from './components/Toast.vue'
+import { useToast } from './composables/useToast'
 
 const { parseResult, animationName, fullFileName, isLoading, error, loadFile } = useFileLoader()
 const { renderedDirections, generatePreview, generateForExport } = usePoseGenerator()
-const { isExporting, exportProgress, exportPng, exportVideo } = useExport()
+const { isExporting, exportProgress, exportAll } = useExport()
 const { entries: logEntries, log, clear: clearLog } = useLog()
+const { toast } = useToast()
 
 const preview = usePreview(() => renderedDirections.value as any[])
 
@@ -27,7 +30,8 @@ const directionPreset = ref<DirectionPreset>('four')
 const skeletonMode = ref<SkeletonMode>('openpose')
 const drawHands = ref(false)
 const scale = ref(2.0)
-const exportFormat = ref<ExportFormat>('png')
+const exportPng = ref(true)
+const exportMp4 = ref(false)
 const videoWidth = ref(720)
 const videoHeight = ref(1280)
 const videoFps = ref(24)
@@ -53,7 +57,12 @@ const frameCount = computed(() => {
   return dirs[preview.currentDirection.value]?.frames.length ?? 0
 })
 
-watch(error, (e) => { if (e) log(e, 'error') })
+watch(error, (e) => {
+  if (e) {
+    log(e, 'error')
+    toast(e, 'error', 4000)
+  }
+})
 
 // --- Auto-generate logic ---
 
@@ -84,6 +93,11 @@ watch(parseResult, (result) => {
 watch([directionPreset, skeletonMode, drawHands], () => {
   if (parseResult.value) triggerPreview()
 })
+
+function onInvalidFile(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '未知'
+  toast(`不支持的文件格式 (.${ext})，仅支持 .dae 和 .zip 文件`, 'warning')
+}
 
 async function onFileSelected(file: File) {
   log(`加载文件: ${file.name}`, 'info')
@@ -118,15 +132,12 @@ async function onExport() {
     return
   }
 
-  if (exportFormat.value === 'png') {
-    log('开始导出 PNG...', 'info')
-    await exportPng(renderedDirections.value as any[], animationName.value)
-    log('PNG 导出完成', 'success')
-  } else {
-    if (!parseResult.value) return
-    log('开始渲染并导出 MP4...', 'info')
+  const wantMp4 = exportMp4.value && parseResult.value
+  let mp4Dirs: any[] | undefined
 
-    const dirs = await generateForExport(
+  if (wantMp4) {
+    log('开始渲染高分辨率帧...', 'info')
+    mp4Dirs = await generateForExport(
       parseResult.value as ParseResult,
       directionPreset.value,
       skeletonMode.value,
@@ -135,24 +146,28 @@ async function onExport() {
       videoWidth.value,
       videoHeight.value,
       (cur, total, dir) => log(`渲染 ${dir}: ${cur}/${total}`, 'info'),
-    )
-
-    const target = computeTargetFrames(parseResult.value.frameCount, videoFps.value)
-    await exportVideo(
-      dirs as any[],
-      animationName.value,
-      videoWidth.value,
-      videoHeight.value,
-      videoFps.value,
-      target,
-    )
-    log('MP4 导出完成', 'success')
+    ) as any[]
   }
+
+  log('开始打包导出...', 'info')
+  await exportAll({
+    png: exportPng.value,
+    mp4: !!wantMp4,
+    pngDirections: renderedDirections.value as any[],
+    mp4Directions: mp4Dirs,
+    animationName: animationName.value,
+    videoWidth: videoWidth.value,
+    videoHeight: videoHeight.value,
+    videoFps: videoFps.value,
+    targetFrames: wantMp4 ? computeTargetFrames(parseResult.value!.frameCount, videoFps.value) : 0,
+  })
+  log('导出完成', 'success')
 }
 </script>
 
 <template>
   <div class="app">
+    <Toast />
     <header class="app-header">
       <h1>Mixamo Pose Generator</h1>
       <span class="version">Web v1.0</span>
@@ -165,13 +180,15 @@ async function onExport() {
           :frame-count="parseResult?.frameCount"
           :is-loading="isLoading"
           @file-selected="onFileSelected"
+          @invalid-file="onInvalidFile"
         />
 
         <ConfigPanel
           :direction-preset="directionPreset"
           :skeleton-mode="skeletonMode"
           :draw-hands="drawHands"
-          :export-format="exportFormat"
+          :export-png="exportPng"
+          :export-mp4="exportMp4"
           :video-width="videoWidth"
           :video-height="videoHeight"
           :video-fps="videoFps"
@@ -183,7 +200,8 @@ async function onExport() {
           @update:direction-preset="directionPreset = $event"
           @update:skeleton-mode="skeletonMode = $event"
           @update:draw-hands="drawHands = $event"
-          @update:export-format="exportFormat = $event"
+          @update:export-png="exportPng = $event"
+          @update:export-mp4="exportMp4 = $event"
           @update:video-width="videoWidth = $event"
           @update:video-height="videoHeight = $event"
           @update:video-fps="videoFps = $event"

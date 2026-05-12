@@ -21,7 +21,7 @@ export function useFileLoader() {
       parseResult.value = result
       animationName.value = file.name.replace(/\.(dae|zip)$/i, '')
     } catch (e: any) {
-      error.value = e.message || 'Failed to parse file'
+      error.value = e.message || '文件解析失败'
       fullFileName.value = ''
     } finally {
       isLoading.value = false

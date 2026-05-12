@@ -3,23 +3,49 @@ import { ref, computed } from 'vue'
 
 const emit = defineEmits<{
   fileSelected: [file: File]
+  invalidFile: [fileName: string]
 }>()
 
 const isDragOver = ref(false)
 const fileInput = ref<HTMLInputElement>()
+let dragCounter = 0
+
+function onDragEnter(e: DragEvent) {
+  e.preventDefault()
+  dragCounter++
+  isDragOver.value = true
+}
+
+function onDragLeave() {
+  dragCounter--
+  if (dragCounter <= 0) {
+    dragCounter = 0
+    isDragOver.value = false
+  }
+}
 
 function onDrop(e: DragEvent) {
+  dragCounter = 0
   isDragOver.value = false
   const file = e.dataTransfer?.files[0]
-  if (file && /\.(dae|zip)$/i.test(file.name)) {
+  if (!file) return
+  if (/\.(dae|zip)$/i.test(file.name)) {
     emit('fileSelected', file)
+  } else {
+    emit('invalidFile', file.name)
   }
 }
 
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  if (file) emit('fileSelected', file)
+  if (file) {
+    if (/\.(dae|zip)$/i.test(file.name)) {
+      emit('fileSelected', file)
+    } else {
+      emit('invalidFile', file.name)
+    }
+  }
   input.value = ''
 }
 
@@ -33,57 +59,67 @@ const props = defineProps<{
   isLoading?: boolean
 }>()
 
+const state = computed<'empty' | 'loading' | 'loaded'>(() => {
+  if (props.isLoading) return 'loading'
+  if (props.fileName) return 'loaded'
+  return 'empty'
+})
+
 const isZip = computed(() => !!props.fileName && /\.zip$/i.test(props.fileName))
 const fileTypeLabel = computed(() => isZip.value ? 'ZIP' : 'DAE')
 </script>
 
 <template>
-  <div class="file-loader">
-    <div
-      class="drop-zone"
-      :class="{
-        'drag-over': isDragOver,
-        'has-file': fileName,
-        'replacing': isDragOver && fileName,
-      }"
-      @dragover.prevent="isDragOver = true"
-      @dragleave="isDragOver = false"
-      @drop.prevent="onDrop"
-    >
-      <input
-        ref="fileInput"
-        type="file"
-        accept=".dae,.zip"
-        hidden
-        @change="onFileChange"
-      />
+  <div
+    class="drop-zone"
+    :class="{
+      'drag-over': isDragOver,
+      'has-file': state === 'loaded',
+      'is-empty': state === 'empty',
+    }"
+    @dragover.prevent
+    @dragenter="onDragEnter"
+    @dragleave="onDragLeave"
+    @drop.prevent="onDrop"
+    @click="state === 'empty' && browse()"
+  >
+    <input
+      ref="fileInput"
+      type="file"
+      accept=".dae,.zip"
+      hidden
+      @change="onFileChange"
+    />
 
-      <!-- Drag-over replace overlay -->
-      <div v-if="isDragOver && fileName" class="replace-overlay">
-        <span class="replace-icon">↻</span>
-        <span>释放以替换文件</span>
-      </div>
-
-      <div v-if="isLoading" class="drop-content">
-        <span class="spinner" />
-        <span>解析中...</span>
-      </div>
-      <div v-else-if="fileName" class="drop-content loaded" :class="{ blurred: isDragOver }">
-        <span class="file-icon" :class="isZip ? 'zip' : 'dae'">
-          {{ isZip ? '📦' : '🦴' }}
-        </span>
-        <div class="file-info">
-          <span class="file-name" :title="fileName">{{ fileName }}</span>
-          <span class="file-meta">
-            <span class="file-type-badge" :class="isZip ? 'zip' : 'dae'">{{ fileTypeLabel }}</span>
-            <span class="frame-count">{{ frameCount }} 帧</span>
-          </span>
-        </div>
-      </div>
-      <div v-else class="drop-content" @click="browse">
-        <span class="upload-icon">⬆</span>
+    <!-- All layers stacked via absolute positioning; only active layer visible -->
+    <div class="layer" :class="{ active: state === 'empty' && !isDragOver }">
+      <span class="upload-icon">⬆</span>
+      <div class="text-group">
         <span>拖放 DAE/ZIP 文件到此处</span>
         <span class="hint">或点击浏览</span>
+      </div>
+    </div>
+
+    <div class="layer" :class="{ active: isDragOver }">
+      <span class="replace-icon">↻</span>
+      <div class="text-group">
+        <span>{{ fileName ? '释放以替换文件' : '释放以加载文件' }}</span>
+      </div>
+    </div>
+
+    <div class="layer" :class="{ active: state === 'loading' && !isDragOver }">
+      <span class="spinner" />
+      <span>解析中...</span>
+    </div>
+
+    <div class="layer" :class="{ active: state === 'loaded' && !isDragOver }">
+      <span class="file-icon">{{ isZip ? '📦' : '🦴' }}</span>
+      <div class="text-group">
+        <span class="file-name" :title="fileName">{{ fileName }}</span>
+        <span class="file-meta">
+          <span class="file-type-badge" :class="isZip ? 'zip' : 'dae'">{{ fileTypeLabel }}</span>
+          <span class="frame-count">{{ frameCount }} 帧</span>
+        </span>
       </div>
     </div>
   </div>
@@ -92,84 +128,56 @@ const fileTypeLabel = computed(() => isZip.value ? 'ZIP' : 'DAE')
 <style scoped>
 .drop-zone {
   position: relative;
+  height: 62px;
   border: 2px dashed var(--border);
   border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  cursor: default;
-  transition: all 0.25s ease;
   background: var(--bg-secondary);
   overflow: hidden;
 }
-.drop-zone:not(.has-file) {
+.drop-zone.is-empty {
   cursor: pointer;
 }
-.drop-zone:not(.has-file):hover,
-.drop-zone.drag-over:not(.has-file) {
+.drop-zone.is-empty:hover,
+.drop-zone.drag-over {
   border-color: var(--accent);
   background: var(--bg-hover);
 }
 .drop-zone.has-file {
-  border-style: solid;
   border-color: var(--success);
 }
-.drop-zone.replacing {
+.drop-zone.has-file.drag-over {
   border-color: var(--accent);
-  border-style: dashed;
 }
-.drop-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-  transition: filter 0.25s ease, opacity 0.25s ease;
-}
-.drop-content.loaded {
-  flex-direction: row;
-  gap: 10px;
-  justify-content: center;
-}
-.drop-content.blurred {
-  filter: blur(3px);
-  opacity: 0.35;
-}
-.replace-overlay {
+
+.layer {
   position: absolute;
   inset: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  z-index: 1;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 600;
-  pointer-events: none;
-  animation: fadeIn 0.15s ease;
+  gap: 10px;
+  padding: 0 20px;
+  color: var(--text-secondary);
+  visibility: hidden;
+  opacity: 0;
 }
-.replace-icon {
-  font-size: 22px;
-  animation: pulse 1s ease infinite;
+.layer.active {
+  visibility: visible;
+  opacity: 1;
 }
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
-}
-.upload-icon { font-size: 24px; }
+
+.upload-icon { font-size: 22px; flex-shrink: 0; }
 .file-icon { font-size: 22px; flex-shrink: 0; }
-.hint { font-size: 12px; opacity: 0.6; }
-.file-info {
+.replace-icon { font-size: 22px; flex-shrink: 0; color: var(--accent); }
+.text-group {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  font-size: 13px;
   min-width: 0;
 }
+.hint { font-size: 12px; opacity: 0.6; }
 .file-name {
   color: var(--text-primary);
   font-weight: 600;
@@ -207,6 +215,7 @@ const fileTypeLabel = computed(() => isZip.value ? 'ZIP' : 'DAE')
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>

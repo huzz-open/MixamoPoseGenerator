@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import type { DirectionPreset, SkeletonMode, ExportFormat, LoopMode } from '../../types/config'
+import type { DirectionPreset, SkeletonMode, LoopMode } from '../../types/config'
 import { DIRECTION_CONFIGS } from '../../types/config'
 
 const props = defineProps<{
   directionPreset: DirectionPreset
   skeletonMode: SkeletonMode
   drawHands: boolean
-  exportFormat: ExportFormat
+  exportPng: boolean
+  exportMp4: boolean
   videoWidth: number
   videoHeight: number
   videoFps: number
@@ -21,7 +22,8 @@ const emit = defineEmits<{
   'update:directionPreset': [value: DirectionPreset]
   'update:skeletonMode': [value: SkeletonMode]
   'update:drawHands': [value: boolean]
-  'update:exportFormat': [value: ExportFormat]
+  'update:exportPng': [value: boolean]
+  'update:exportMp4': [value: boolean]
   'update:videoWidth': [value: number]
   'update:videoHeight': [value: number]
   'update:videoFps': [value: number]
@@ -86,28 +88,26 @@ const skeletonModes: { value: SkeletonMode; label: string }[] = [
 
     <section>
       <h3>导出</h3>
-      <div class="radio-group">
-        <label class="radio-label">
+      <div class="checkbox-group">
+        <label class="checkbox-label">
           <input
-            type="radio"
-            value="png"
-            :checked="exportFormat === 'png'"
-            @change="emit('update:exportFormat', 'png')"
+            type="checkbox"
+            :checked="exportPng"
+            @change="emit('update:exportPng', ($event.target as HTMLInputElement).checked)"
           />
           <span>PNG 帧图</span>
         </label>
-        <label class="radio-label">
+        <label class="checkbox-label">
           <input
-            type="radio"
-            value="mp4"
-            :checked="exportFormat === 'mp4'"
-            @change="emit('update:exportFormat', 'mp4')"
+            type="checkbox"
+            :checked="exportMp4"
+            @change="emit('update:exportMp4', ($event.target as HTMLInputElement).checked)"
           />
           <span>MP4 骨骼视频 (Wan 2.2)</span>
         </label>
       </div>
 
-      <div v-if="exportFormat === 'mp4'" class="video-opts">
+      <div v-if="exportMp4" class="video-opts">
         <div class="input-row">
           <span>分辨率:</span>
           <input type="number" :value="videoWidth" min="128" max="4096" style="width:60px"
@@ -150,7 +150,7 @@ const skeletonModes: { value: SkeletonMode; label: string }[] = [
 
     <button
       class="btn btn-accent full-width"
-      :disabled="!hasPreview || isExporting"
+      :disabled="!hasPreview || isExporting || (!exportPng && !exportMp4)"
       @click="emit('export')"
     >
       {{ isExporting ? '导出中...' : '导出到磁盘' }}
@@ -169,7 +169,7 @@ const skeletonModes: { value: SkeletonMode; label: string }[] = [
 section { display: flex; flex-direction: column; gap: 6px; }
 h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .divider { height: 1px; background: var(--border); margin: 4px 0; }
-.radio-group { display: flex; flex-direction: column; gap: 3px; padding-left: 4px; }
+.radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 3px; padding-left: 4px; }
 .radio-group.small { font-size: 12px; }
 .radio-label, .checkbox-label {
   display: flex; align-items: center; gap: 6px; cursor: pointer;
