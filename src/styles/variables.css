@@ -1,0 +1,14 @@
+:root {
+  --bg-primary: #0d0d0d;
+  --bg-secondary: #161616;
+  --bg-hover: #1f1f1f;
+  --bg-input: #1a1a1a;
+  --border: #2a2a2a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #888;
+  --accent: #4a7dff;
+  --accent-hover: #5a8aff;
+  --success: #34c759;
+  --error: #ff453a;
+  --warning: #ff9f0a;
+}
