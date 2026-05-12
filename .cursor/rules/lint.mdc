@@ -1,0 +1,26 @@
+---
+description: ESLint rules and lint workflow for the project
+globs: "**/*.{ts,vue}"
+alwaysApply: false
+---
+
+# Lint 规范
+
+本项目使用 ESLint (flat config) + typescript-eslint + eslint-plugin-vue。
+
+## 常用命令
+
+- `npm run lint` — 检查 src/ 下所有文件
+- `npm run lint:fix` — 自动修复可修复的问题
+- `npx eslint <file>` — 检查单个文件
+
+## 规则要点
+
+- TypeScript: 禁止未使用变量（以 `_` 开头的参数除外），允许 `any`
+- Vue: 放宽模板格式约束（属性换行、闭合括号等不强制）
+- 浏览器全局变量已在 eslint.config.js 中配置，无需 `/* global */` 注释
+- `src/env.d.ts` 被排除在 lint 检查之外
+
+## 编辑文件后
+
+修改 `.ts` 或 `.vue` 文件后应对变动的文件运行 lint 检查，确保不引入新错误。

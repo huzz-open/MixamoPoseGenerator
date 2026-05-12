@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
   },
   "dependencies": {
     "jszip": "^3.10.1",
@@ -17,11 +19,15 @@
     "wgpu-matrix": "^3.4.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.3",
     "@types/three": "^0.184.1",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-vue": "^10.9.1",
     "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.3",
     "vite": "^8.0.12",
     "vue-tsc": "^3.2.8"
   }
