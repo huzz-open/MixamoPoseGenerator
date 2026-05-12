@@ -8,6 +8,7 @@ import { mapFrameToOpenpose } from '../core/openpose-mapper'
 export interface RenderOptions {
   drawHands: boolean
   drawFace: boolean
+  faceScale: number
   xinsrScaling: boolean
 }
 
@@ -23,7 +24,7 @@ export function renderFrame(
     return renderRawFrame(joints, bones, width, height)
   }
 
-  const opFrame = mapFrameToOpenpose(joints, opts.drawHands, opts.drawFace)
+  const opFrame = mapFrameToOpenpose(joints, opts.drawHands, opts.drawFace, opts.faceScale)
 
   if (mode === 'dwpose') {
     return renderDwposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace)

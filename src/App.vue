@@ -30,6 +30,7 @@ const directionPreset = ref<DirectionPreset>('four')
 const skeletonMode = ref<SkeletonMode>('openpose')
 const drawHands = ref(true)
 const drawFace = ref(true)
+const faceScale = ref(0.55)
 const xinsrScaling = ref(false)
 const scale = ref(2.0)
 const exportPng = ref(true)
@@ -44,6 +45,7 @@ const loopDuration = ref(3.5)
 const renderOpts = computed(() => ({
   drawHands: drawHands.value,
   drawFace: drawFace.value,
+  faceScale: faceScale.value,
   xinsrScaling: xinsrScaling.value,
 }))
 
@@ -98,7 +100,7 @@ watch(parseResult, (result) => {
 })
 
 // Auto-regenerate on discrete config changes (immediate)
-watch([directionPreset, skeletonMode, drawHands, drawFace, xinsrScaling], () => {
+watch([directionPreset, skeletonMode, drawHands, drawFace, faceScale, xinsrScaling], () => {
   if (parseResult.value) triggerPreview()
 })
 
@@ -196,6 +198,7 @@ async function onExport() {
           :skeleton-mode="skeletonMode"
           :draw-hands="drawHands"
           :draw-face="drawFace"
+          :face-scale="faceScale"
           :xinsr-scaling="xinsrScaling"
           :export-png="exportPng"
           :export-mp4="exportMp4"
@@ -211,6 +214,7 @@ async function onExport() {
           @update:skeleton-mode="skeletonMode = $event"
           @update:draw-hands="drawHands = $event"
           @update:draw-face="drawFace = $event"
+          @update:face-scale="faceScale = $event"
           @update:xinsr-scaling="xinsrScaling = $event"
           @update:export-png="exportPng = $event"
           @update:export-mp4="exportMp4 = $event"

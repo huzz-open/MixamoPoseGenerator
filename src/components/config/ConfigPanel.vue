@@ -7,6 +7,7 @@ const props = defineProps<{
   skeletonMode: SkeletonMode
   drawHands: boolean
   drawFace: boolean
+  faceScale: number
   xinsrScaling: boolean
   exportPng: boolean
   exportMp4: boolean
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   'update:skeletonMode': [value: SkeletonMode]
   'update:drawHands': [value: boolean]
   'update:drawFace': [value: boolean]
+  'update:faceScale': [value: number]
   'update:xinsrScaling': [value: boolean]
   'update:exportPng': [value: boolean]
   'update:exportMp4': [value: boolean]
@@ -95,6 +97,18 @@ const skeletonModes: { value: SkeletonMode; label: string; desc: string }[] = [
           />
           <span>面部关键点 (68点)</span>
         </label>
+        <div v-if="drawFace" class="face-scale-row">
+          <span class="face-scale-label">面部比例</span>
+          <input
+            type="range"
+            min="0.2"
+            max="1.2"
+            step="0.05"
+            :value="faceScale"
+            @input="emit('update:faceScale', parseFloat(($event.target as HTMLInputElement).value))"
+          />
+          <span class="face-scale-value">{{ faceScale.toFixed(2) }}</span>
+        </div>
         <label v-if="skeletonMode === 'openpose'" class="checkbox-label">
           <input
             type="checkbox"
@@ -199,6 +213,13 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 }
 .radio-label:hover, .checkbox-label:hover { color: var(--text-primary); }
 .mode-desc { font-size: 11px; color: var(--text-secondary); opacity: 0.7; }
+.face-scale-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 0 2px 22px; font-size: 12px; color: var(--text-secondary);
+}
+.face-scale-row input[type=range] { flex: 1; height: 4px; accent-color: var(--accent); cursor: pointer; }
+.face-scale-label { white-space: nowrap; }
+.face-scale-value { font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
 .video-opts {
   display: flex; flex-direction: column; gap: 6px;
   padding: 8px; background: var(--bg-secondary); border-radius: 6px;

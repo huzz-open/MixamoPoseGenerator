@@ -131,20 +131,18 @@ function deriveFaceKeypoints(joints: FrameData): Record<string, Vec3> {
   return result
 }
 
-function deriveFace68Landmarks(joints: FrameData): (Vec3 | null)[] | null {
+function deriveFace68Landmarks(joints: FrameData, scaleFactor: number): (Vec3 | null)[] | null {
   const headTop = joints.get('mixamorig_HeadTop_End')
   const headBase = joints.get('mixamorig_Head')
-  const neck = joints.get('mixamorig_Neck')
   const rShoulder = joints.get('mixamorig_RightArm')
   const lShoulder = joints.get('mixamorig_LeftArm')
 
-  if (!headBase || !headTop || !neck) return null
+  if (!headBase || !headTop) return null
 
-  const headCenter = vecMid(headBase, headTop)
-  const headHeight = vecLen(vecSub(headTop, neck))
+  const headHeight = vecLen(vecSub(headTop, headBase))
   if (headHeight < 1e-6) return null
 
-  const upVec = vecNorm(vecSub(headTop, neck))
+  const upVec = vecNorm(vecSub(headTop, headBase))
   if (!upVec) return null
 
   let rightVec: Vec3 | null = null
@@ -153,15 +151,14 @@ function deriveFace68Landmarks(joints: FrameData): (Vec3 | null)[] | null {
   }
   if (!rightVec) rightVec = [1, 0, 0]
 
-  const faceScale = headHeight * 0.7
-  const faceCenterOffset = vecScale(upVec, -headHeight * 0.05)
-  const faceCenter = vecAdd(headCenter, faceCenterOffset)
+  const faceSize = headHeight * scaleFactor
+  const faceCenter = vecMid(headBase, headTop)
 
   const result: (Vec3 | null)[] = []
   for (const [tx, ty] of FACE_68_TEMPLATE) {
     const pt = vecAdd(
-      vecAdd(faceCenter, vecScale(rightVec, tx * faceScale)),
-      vecScale(upVec, -ty * faceScale),
+      vecAdd(faceCenter, vecScale(rightVec, tx * faceSize)),
+      vecScale(upVec, -ty * faceSize),
     )
     result.push(pt)
   }
@@ -188,7 +185,7 @@ function mapHandKeypoints(joints: FrameData, side: 'Left' | 'Right'): (Vec3 | nu
   return kps
 }
 
-export function mapFrameToOpenpose(joints: FrameData, drawHands: boolean, drawFace: boolean = true): OpenPoseFrame {
+export function mapFrameToOpenpose(joints: FrameData, drawHands: boolean, drawFace: boolean = true, faceScale: number = 0.55): OpenPoseFrame {
   const faceKps = deriveFaceKeypoints(joints)
 
   const body: (Vec3 | null)[] = new Array(18).fill(null)
@@ -210,10 +207,10 @@ export function mapFrameToOpenpose(joints: FrameData, drawHands: boolean, drawFa
     body,
     leftHand: drawHands ? mapHandKeypoints(joints, 'Left') : null,
     rightHand: drawHands ? mapHandKeypoints(joints, 'Right') : null,
-    face: drawFace ? deriveFace68Landmarks(joints) : null,
+    face: drawFace ? deriveFace68Landmarks(joints, faceScale) : null,
   }
 }
 
-export function mapToOpenpose(rawFrames: FrameData[], drawHands: boolean, drawFace: boolean = true): OpenPoseFrame[] {
-  return rawFrames.map(frame => mapFrameToOpenpose(frame, drawHands, drawFace))
+export function mapToOpenpose(rawFrames: FrameData[], drawHands: boolean, drawFace: boolean = true, faceScale: number = 0.55): OpenPoseFrame[] {
+  return rawFrames.map(frame => mapFrameToOpenpose(frame, drawHands, drawFace, faceScale))
 }
