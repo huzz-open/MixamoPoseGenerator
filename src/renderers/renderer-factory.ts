@@ -3,6 +3,7 @@ import type { SkeletonMode } from '../types/config'
 import { renderRawFrame } from './canvas2d/raw-renderer'
 import { renderOpenposeFrame } from './canvas2d/openpose-renderer'
 import { renderDwposeFrame } from './canvas2d/dwpose-renderer'
+import { renderOpenposeFrame3D } from './threejs/openpose-renderer-3d'
 import { mapFrameToOpenpose } from '../core/openpose-mapper'
 
 export interface RenderOptions {
@@ -10,6 +11,21 @@ export interface RenderOptions {
   drawFace: boolean
   faceScale: number
   xinsrScaling: boolean
+}
+
+function renderOpenpose(
+  opFrame: OpenPoseFrame,
+  width: number,
+  height: number,
+  drawHands: boolean,
+  drawFace: boolean,
+  xinsrScaling: boolean,
+): HTMLCanvasElement {
+  try {
+    return renderOpenposeFrame3D(opFrame, width, height, drawHands, drawFace, xinsrScaling)
+  } catch {
+    return renderOpenposeFrame(opFrame, width, height, drawHands, drawFace, xinsrScaling)
+  }
 }
 
 export function renderFrame(
@@ -30,7 +46,7 @@ export function renderFrame(
     return renderDwposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace)
   }
 
-  return renderOpenposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace, opts.xinsrScaling)
+  return renderOpenpose(opFrame, width, height, opts.drawHands, opts.drawFace, opts.xinsrScaling)
 }
 
 export function renderOpFrame(
@@ -43,5 +59,5 @@ export function renderOpFrame(
   if (mode === 'dwpose') {
     return renderDwposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace)
   }
-  return renderOpenposeFrame(opFrame, width, height, opts.drawHands, opts.drawFace, opts.xinsrScaling)
+  return renderOpenpose(opFrame, width, height, opts.drawHands, opts.drawFace, opts.xinsrScaling)
 }
