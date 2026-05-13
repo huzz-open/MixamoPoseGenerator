@@ -24,6 +24,7 @@ const props = defineProps<{
   loopMode: LoopMode
   loopCount: number
   loopDuration: number
+  liveViewAngle: number | null
   hasPreview: boolean
   isExporting: boolean
 }>()
@@ -109,12 +110,12 @@ function addCustomDirection() {
         <div v-if="directions.length > 0" class="dir-list">
           <div
             v-for="(dir, idx) in directions"
-            :key="dir.angle"
+            :key="dir.name"
             class="dir-item"
             :class="{ 'dir-active': idx === currentDirectionIndex }"
             @click="emit('selectDirection', idx)"
           >
-            <span class="dir-angle">{{ dir.angle }}°</span>
+            <span class="dir-angle">{{ idx === currentDirectionIndex && liveViewAngle != null ? liveViewAngle : dir.angle }}°</span>
             <span class="dir-name">{{ dir.name }}</span>
             <button class="dir-remove" @click.stop="removeDirection(idx)" title="移除">×</button>
           </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import type { SkeletonMode, LoopMode, DirectionEntry } from './types/config'
 import type { ParseResult } from './types/pose'
 import { DEFAULT_DIRECTIONS } from './types/config'
@@ -15,11 +15,13 @@ import MeshPreview from './components/preview/MeshPreview.vue'
 import ProgressBar from './components/export/ProgressBar.vue'
 import Toast from './components/Toast.vue'
 import { useToast } from './composables/useToast'
+import { useRotationHistory } from './composables/useRotationHistory'
 
 const { parseResult, animationName, fullFileName, isLoading, error, daeXmlContent, loadFile } = useFileLoader()
 const { renderedDirections, generatePreview, generateForExport } = usePoseGenerator()
 const { isExporting, exportProgress, exportAll } = useExport()
 const { toast } = useToast()
+const rotationHistory = useRotationHistory()
 
 const preview = usePreview(() => renderedDirections.value as any[])
 
@@ -39,6 +41,7 @@ const videoFps = ref(24)
 const loopMode = ref<LoopMode>('auto')
 const loopCount = ref(4)
 const loopDuration = ref(3.5)
+const liveViewAngle = ref<number | null>(null)
 
 const currentYAngle = computed(() => {
   const dirs = renderedDirections.value
@@ -105,6 +108,56 @@ watch(parseResult, (result) => {
 watch([activeDirections, skeletonMode, drawHands, drawFace, faceScale, xinsrScaling], () => {
   if (parseResult.value) triggerPreview()
 }, { deep: true })
+
+function applyAngleChange(name: string, angle: number, selectDirection = false) {
+  const dirs = [...activeDirections.value]
+  const idx = dirs.findIndex(d => d.name === name)
+  if (idx < 0) return
+  dirs[idx] = { ...dirs[idx], angle }
+  activeDirections.value = dirs
+  if (selectDirection) {
+    preview.currentDirection.value = idx
+  }
+}
+
+function onRotateEnd(angle: number) {
+  const idx = preview.currentDirection.value
+  const dirs = activeDirections.value
+  if (idx < 0 || idx >= dirs.length) return
+  const dir = dirs[idx]
+  if (dir.angle === angle) return
+  rotationHistory.push({ directionName: dir.name, oldAngle: dir.angle, newAngle: angle })
+  applyAngleChange(dir.name, angle)
+}
+
+function onUndoRotation() {
+  const record = rotationHistory.undo()
+  if (!record) return
+  applyAngleChange(record.directionName, record.oldAngle, true)
+}
+
+function onRedoRotation() {
+  const record = rotationHistory.redo()
+  if (!record) return
+  applyAngleChange(record.directionName, record.newAngle, true)
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      onUndoRotation()
+    } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+      e.preventDefault()
+      onRedoRotation()
+    }
+  }
+}
+
+onMounted(() => { document.addEventListener('keydown', onKeyDown) })
+onUnmounted(() => { document.removeEventListener('keydown', onKeyDown) })
 
 function onInvalidFile(fileName: string) {
   const ext = fileName.split('.').pop()?.toLowerCase() || '未知'
@@ -198,6 +251,7 @@ async function onExport() {
         <ConfigPanel
           :directions="activeDirections"
           :current-direction-index="preview.currentDirection.value"
+          :live-view-angle="daeXmlContent ? liveViewAngle : null"
           :skeleton-mode="skeletonMode"
           :draw-hands="drawHands"
           :draw-face="drawFace"
@@ -254,11 +308,17 @@ async function onExport() {
           :draw-face="drawFace"
           :face-scale="faceScale"
           :xinsr-scaling="xinsrScaling"
+          :can-undo="rotationHistory.canUndo.value"
+          :can-redo="rotationHistory.canRedo.value"
           @toggle-play="preview.togglePlay()"
           @prev-frame="preview.prevFrame()"
           @next-frame="preview.nextFrame()"
           @seek-frame="preview.currentFrame.value = $event"
           @update:fps="preview.fps.value = $event"
+          @update:view-angle="liveViewAngle = $event"
+          @rotate-end="onRotateEnd"
+          @undo="onUndoRotation"
+          @redo="onRedoRotation"
         />
         <template v-else>
           <PreviewCanvas :canvas="currentCanvas" />

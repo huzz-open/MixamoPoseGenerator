@@ -18,6 +18,8 @@ import prevFrameIcon from '../../assets/icon/pre-frame.svg'
 import nextFrameIcon from '../../assets/icon/next-frame.svg'
 import playIcon from '../../assets/icon/play.svg'
 import stopIcon from '../../assets/icon/stop.svg'
+import undoIcon from '../../assets/icon/undo.svg'
+import redoIcon from '../../assets/icon/redo.svg'
 
 const props = defineProps<{
   daeXml: string | null
@@ -32,6 +34,8 @@ const props = defineProps<{
   drawFace: boolean
   faceScale: number
   xinsrScaling: boolean
+  canUndo: boolean
+  canRedo: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +44,10 @@ const emit = defineEmits<{
   nextFrame: []
   seekFrame: [frame: number]
   'update:fps': [value: number]
+  'update:viewAngle': [value: number]
+  rotateEnd: [angle: number]
+  undo: []
+  redo: []
 }>()
 
 const containerRef = ref<HTMLDivElement>()
@@ -73,6 +81,8 @@ let gridHelper: THREE.GridHelper | null = null
 let axesHelper: THREE.AxesHelper | null = null
 let skeletonHelper: THREE.SkeletonHelper | null = null
 let animId = 0
+let orbitStartAzimuth = 0
+let syncTimeout: ReturnType<typeof setTimeout> | null = null
 
 let modelHeight = 1
 let hipsRoot: THREE.Bone | null = null
@@ -86,7 +96,38 @@ function activeCamera(): THREE.Camera | null {
 function updateViewAngle() {
   if (!controls) return
   const azimuthDeg = THREE.MathUtils.radToDeg(controls.getAzimuthalAngle())
-  viewAngle.value = Math.round(((props.yAngle + azimuthDeg) % 360 + 360) % 360)
+  viewAngle.value = Math.round(((props.yAngle - azimuthDeg) % 360 + 360) % 360)
+  emit('update:viewAngle', viewAngle.value)
+}
+
+function resetAzimuth() {
+  const cam = activeCamera()
+  if (!cam || !controls) return
+  const dist = cam.position.distanceTo(controls.target)
+  const polar = controls.getPolarAngle()
+  cam.position.set(
+    controls.target.x,
+    controls.target.y + dist * Math.cos(polar),
+    controls.target.z + dist * Math.sin(polar),
+  )
+  controls.update()
+}
+
+function onOrbitStart() {
+  if (syncTimeout) { clearTimeout(syncTimeout); syncTimeout = null }
+  orbitStartAzimuth = controls?.getAzimuthalAngle() ?? 0
+}
+
+function onOrbitEnd() {
+  if (!controls) return
+  const endAzimuth = controls.getAzimuthalAngle()
+  if (Math.abs(endAzimuth - orbitStartAzimuth) > 0.005) {
+    if (syncTimeout) clearTimeout(syncTimeout)
+    syncTimeout = setTimeout(() => {
+      emit('rotateEnd', viewAngle.value)
+      syncTimeout = null
+    }, 300)
+  }
 }
 
 function applyRotationLock() {
@@ -134,6 +175,8 @@ function initScene() {
   controls.enableDamping = true
   controls.dampingFactor = 0.1
   controls.addEventListener('change', updateViewAngle)
+  controls.addEventListener('start', onOrbitStart)
+  controls.addEventListener('end', onOrbitEnd)
   controls.update()
 
   const ambient = new THREE.AmbientLight(0xffffff, 1.2)
@@ -515,8 +558,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   cancelAnimationFrame(animId)
+  if (syncTimeout) { clearTimeout(syncTimeout); syncTimeout = null }
   ro?.disconnect()
   controls?.removeEventListener('change', updateViewAngle)
+  controls?.removeEventListener('start', onOrbitStart)
+  controls?.removeEventListener('end', onOrbitEnd)
   clearModel()
   controls?.dispose()
   renderer?.dispose()
@@ -533,9 +579,11 @@ watch(() => props.daeXml, (xml) => {
 })
 
 watch(() => props.yAngle, (angle) => {
+  if (syncTimeout) { clearTimeout(syncTimeout); syncTimeout = null }
   if (modelGroup) {
     modelGroup.rotation.y = THREE.MathUtils.degToRad(angle)
   }
+  resetAzimuth()
   updateViewAngle()
 })
 
@@ -647,6 +695,24 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
           title="重置旋转：将相机恢复到水平视角"
           @click="resetRotation"
         ><img :src="resetIcon" class="tb-icon" /></button>
+
+        <div class="tb-divider" />
+
+        <button
+          class="tb-btn"
+          :class="{ disabled: !canUndo }"
+          :disabled="!canUndo"
+          title="撤销旋转 (Ctrl+Z)"
+          @click="emit('undo')"
+        ><img :src="undoIcon" class="tb-icon" /></button>
+
+        <button
+          class="tb-btn"
+          :class="{ disabled: !canRedo }"
+          :disabled="!canRedo"
+          title="重做旋转 (Ctrl+Shift+Z)"
+          @click="emit('redo')"
+        ><img :src="redoIcon" class="tb-icon" /></button>
 
         <div class="tb-divider" />
 
