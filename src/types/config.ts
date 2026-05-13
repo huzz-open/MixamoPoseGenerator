@@ -62,9 +62,9 @@ export const DIRECTION_PRESETS: DirectionPresetDef[] = [
     label: '四方向',
     icon: '✛',
     directions: [
-      { name: 'up', angle: 0 },
+      { name: 'down', angle: 0 },
       { name: 'right', angle: 90 },
-      { name: 'down', angle: 180 },
+      { name: 'up', angle: 180 },
       { name: 'left', angle: 270 },
     ],
   },
@@ -73,21 +73,21 @@ export const DIRECTION_PRESETS: DirectionPresetDef[] = [
     label: '八方向',
     icon: '✺',
     directions: [
-      { name: 'up', angle: 0 },
-      { name: 'up_right', angle: 45 },
+      { name: 'down', angle: 0 },
+      { name: 'down_right', angle: 45 },
       { name: 'right', angle: 90 },
-      { name: 'down_right', angle: 135 },
-      { name: 'down', angle: 180 },
-      { name: 'down_left', angle: 225 },
+      { name: 'up_right', angle: 135 },
+      { name: 'up', angle: 180 },
+      { name: 'up_left', angle: 225 },
       { name: 'left', angle: 270 },
-      { name: 'up_left', angle: 315 },
+      { name: 'down_left', angle: 315 },
     ],
   },
 ]
 
 export const DEFAULT_DIRECTIONS: DirectionEntry[] = [
-  { name: 'up', angle: 0 },
+  { name: 'down', angle: 0 },
   { name: 'right', angle: 90 },
-  { name: 'down', angle: 180 },
+  { name: 'up', angle: 180 },
   { name: 'left', angle: 270 },
 ]
