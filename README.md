@@ -1,44 +1,99 @@
 # Mixamo Pose Generator
 
-基于 Web 的 Mixamo 动画骨架姿态生成工具。将 Mixamo 导出的 DAE 动画文件转换为 OpenPose / DWPose 骨架图，用于 AI 生图/生视频的姿态控制（ControlNet、Wan 2.1/2.2 等）。
+将 [Mixamo](https://www.mixamo.com/) 动画转换为 OpenPose / DWPose 骨架图的 Web 工具，用于 AI 生图/生视频的姿态控制。
 
-## 功能
+支持 ControlNet (SD/SDXL)、Wan 2.1/2.2 等模型所需的骨架条件格式。
 
-- **DAE 文件解析** — 解析 Mixamo 导出的 COLLADA (.dae) 动画文件，提取骨骼关键帧数据
-- **多方向渲染** — 支持单方向、左右、四方向（上下左右）、八方向的骨架姿态生成
-- **多种骨架模式** — 支持 Raw（原始骨骼）、OpenPose、DWPose 三种渲染模式
-- **实时预览** — 逐帧预览动画，支持播放/暂停、帧跳转
-- **PNG 导出** — 将所有方向的骨架帧导出为 PNG 图片（ZIP 打包）
-- **MP4 视频导出** — 支持自定义分辨率、帧率和循环模式的 MP4 视频导出
-- **循环控制** — 自动（适配 81 帧 Wan 模型）、按次数循环、按时长循环
+## 核心功能
+
+| 功能 | 说明 |
+|:---|:---|
+| DAE 解析 | 解析 Mixamo 导出的 COLLADA (.dae) 文件，支持 ZIP 包直接上传 |
+| 多方向渲染 | 单方向 / 左右 / 四方向 / 八方向骨架生成，支持自定义旋转角度 |
+| 骨架模式 | OpenPose、DWPose、Raw（原始骨骼）三种渲染模式 |
+| 3D 预览 | Three.js 驱动的 Collada 网格实时预览，可旋转观察 |
+| 帧级控制 | 播放/暂停、逐帧跳转、FPS 调节 |
+| PNG 导出 | 所有方向的骨架帧序列，ZIP 打包下载 |
+| MP4 导出 | 自定义分辨率、帧率，支持自动/按次/按时长三种循环模式 |
+| 手部/面部 | 可选渲染手部 21 关键点和面部关键点 |
 
 ## 快速开始
 
 ```bash
 npm install
-npm run dev      # 开发服务器
-npm run build    # 生产构建
-npm run preview  # 预览构建产物
+npm run dev        # 启动开发服务器
+npm run build      # 生产构建
+npm run preview    # 预览构建产物
 ```
 
-## 使用方法
+## 使用流程
 
-1. 前往 [Mixamo](https://www.mixamo.com/) 选择动画，以 **COLLADA (.dae)** 格式下载
-2. 在页面中点击上传区域或拖拽文件到上传区域
-3. 选择方向预设（单方向 / 两方向 / 四方向 / 八方向）
-4. 选择骨架模式（OpenPose / DWPose / Raw）
-5. 实时预览生成的骨架动画
-6. 选择导出格式（PNG 或 MP4），点击导出
+1. 在 [Mixamo](https://www.mixamo.com/) 选择动画，以 **COLLADA (.dae)** 格式下载
+2. 拖拽 `.dae` 或 `.zip` 文件到页面上传区域
+3. 选择方向预设和骨架模式
+4. 在 3D 视图中旋转调整观察角度（支持 Ctrl+Z / Ctrl+Y 撤销/重做）
+5. 配置导出参数（格式、分辨率、帧率、循环模式）
+6. 点击导出
 
----
+## 技术栈
 
-## 骨架渲染算法说明
+- **Vue 3** + TypeScript + Vite
+- **Three.js** — 3D Collada 网格渲染与交互
+- **Canvas 2D / WebGL** — 双引擎骨架渲染（WebGL 用于高分辨率批量导出）
+- **WebCodecs + mp4-muxer** — 浏览器端视频编码
+- **JSZip** — PNG 批量打包
 
-本项目的 OpenPose 和 DWPose 渲染算法严格对齐上游 Python 参考实现，确保生成的骨架图与 ControlNet / Wan 模型训练时使用的格式一致。
+## 项目结构
+
+```
+src/
+├── core/                          # 核心解析与映射
+│   ├── dae-parser.ts              #   COLLADA 解析 + ZIP 解包
+│   ├── openpose-mapper.ts         #   Mixamo → COCO 18 关键点映射
+│   └── pose-transformer.ts        #   3D→2D 投影、旋转、缩放、采样
+├── renderers/                     # 骨架渲染引擎
+│   ├── renderer-factory.ts        #   渲染器工厂（模式分发）
+│   ├── render-utils.ts            #   椭圆多边形、HSV、离屏 Canvas 等工具
+│   ├── canvas2d/                  #   Canvas 2D 渲染器
+│   │   ├── openpose-renderer.ts   #     OpenPose 渲染（对齐 controlnet_aux）
+│   │   ├── dwpose-renderer.ts     #     DWPose 渲染（对齐 Wan 2.1/2.2）
+│   │   └── raw-renderer.ts       #     原始骨骼线条
+│   └── webgl/                     #   WebGL GPU 渲染器
+│       ├── gl-pose-renderer.ts    #     胶囊体 + 圆形实例化渲染
+│       ├── gl-utils.ts            #     WebGL 工具函数
+│       └── shaders/               #     GLSL 着色器
+├── exporters/                     # 导出逻辑
+│   ├── png-exporter.ts            #   ZIP 打包 PNG 序列
+│   └── video-exporter.ts          #   WebCodecs MP4 编码
+├── composables/                   # Vue 组合式函数
+│   ├── useFileLoader.ts           #   文件加载与解析状态
+│   ├── usePoseGenerator.ts        #   预览/导出帧生成
+│   ├── usePreview.ts              #   播放状态管理
+│   ├── useExport.ts               #   导出流程编排
+│   ├── useRotationHistory.ts      #   旋转撤销/重做
+│   ├── useToast.ts                #   消息通知
+│   └── useLog.ts                  #   结构化日志
+├── components/                    # Vue 组件
+│   ├── config/                    #   配置面板（文件上传、参数设置）
+│   ├── preview/                   #   预览区（Canvas、3D 视图、动画控制）
+│   ├── export/                    #   导出进度条
+│   └── Toast.vue                  #   通知组件
+├── types/                         # TypeScript 类型定义
+│   ├── pose.ts                    #   Vec3, JointMap, FrameData, ParseResult 等
+│   └── config.ts                  #   SkeletonMode, LoopMode, 方向预设等
+├── styles/                        # 全局样式
+│   ├── global.css
+│   └── variables.css
+└── assets/icon/                   # UI 图标 (SVG)
+```
+
+## 骨架渲染算法
+
+本项目的 OpenPose 和 DWPose 渲染严格对齐上游 Python 实现，确保生成的骨架图与模型训练时使用的格式一致。
 
 ### 关键点格式
 
-两种模式均使用 **COCO 18-Keypoint** 格式（OpenPose Body 25 的前 18 个点）：
+**Body** — COCO 18-Keypoint（OpenPose Body 25 的前 18 个点）：
 
 | 索引 | 关键点 | 索引 | 关键点 |
 |:---:|:---|:---:|:---|
@@ -52,46 +107,42 @@ npm run preview  # 预览构建产物
 | 7 | Left Wrist | 16 | Right Ear |
 | 8 | Right Hip | 17 | Left Ear |
 
-手部使用 **21-Keypoint** 格式（Wrist + 5 指 × 4 关节）。
+**Hand** — 21-Keypoint（Wrist + 5 指 × 4 关节）
 
 ### OpenPose 模式
 
-**用途**：ControlNet OpenPose 条件控制
+适用于 ControlNet OpenPose 条件控制。
 
-**参考实现**：[comfyui_controlnet_aux · `open_pose/util.py :: draw_bodypose`](https://github.com/Fannovel16/comfyui_controlnet_aux/blob/main/src/custom_controlnet_aux/open_pose/util.py)（源自 [controlnet_aux](https://github.com/huggingface/controlnet_aux) by HuggingFace）
+**参考实现**：[comfyui_controlnet_aux · `open_pose/util.py :: draw_bodypose`](https://github.com/Fannovel16/comfyui_controlnet_aux/blob/main/src/custom_controlnet_aux/open_pose/util.py)
 
 **渲染流程**：
-1. 画 17 条肢体：用 `ellipse2Poly` 生成椭圆多边形，颜色为对应 limb 色的 **60%** 亮度（`color × 0.6`）
-2. 画 18 个关节圆点：使用完整亮度颜色
+
+1. 绘制 17 条肢体 — `ellipse2Poly` 椭圆多边形，颜色为 limb 色的 **60%** 亮度
+2. 绘制 18 个关节圆点 — 完整亮度
 
 **参数**：
-- `stickwidth = 4`，按画布尺寸做自适应缩放（对齐 [xinsir/controlnet-openpose-sdxl-1.0](https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0) 的高分辨率缩放策略：`scale = max_side < 500 ? 1 : min(2 + floor(max_side / 1000), 7)`）
-- 关节圆半径：`4 × stickScale`（原版为固定 4，此处随分辨率自适应以避免高分辨率下关节过小）
-- 手部边：`cv2.line` thickness=2，HSV 彩虹色；关节：蓝色圆点 radius=4
-
-**与上游差异**：
-- xinsir 缩放始终启用（上游通过 `xinsr_stick_scaling` 参数可选开启）
-- 关节圆半径随 stickScale 缩放（上游固定 4px）— 确保高分辨率输出视觉一致
+- `stickwidth = 4`，按画布尺寸自适应缩放（对齐 [xinsir/controlnet-openpose-sdxl-1.0](https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0) 的缩放策略）
+- 关节圆半径 `4 × stickScale`（随分辨率自适应，避免高分辨率下过小）
+- 手部边线 thickness=2，HSV 彩虹色；关节蓝色圆点 radius=4
 
 ### DWPose 模式
 
-**用途**：[Wan 2.1](https://github.com/Wan-Video/Wan2.1) / Wan 2.2 视频生成的 DWPose 条件控制
+适用于 [Wan 2.1](https://github.com/Wan-Video/Wan2.1) / Wan 2.2 视频生成的 DWPose 条件控制。
 
 **参考实现**：
-- [Wan2GP · `preprocessing/dwpose/util.py :: draw_bodypose`](https://github.com/deepbeepmeep/Wan2GP/blob/main/preprocessing/dwpose/util.py)（Copyright Alibaba）
+- [Wan2GP · `preprocessing/dwpose/util.py`](https://github.com/deepbeepmeep/Wan2GP/blob/main/preprocessing/dwpose/util.py)
 - [ComfyUI-WanVideoWrapper · `unianimate/dwpose/util.py`](https://github.com/kijai/ComfyUI-WanVideoWrapper/blob/main/unianimate/dwpose/util.py)
 
-**渲染流程**（三步法，与 OpenPose 的关键区别）：
-1. 画 17 条肢体：用 `ellipse2Poly` 生成椭圆多边形，使用 **完整亮度** 颜色
-2. **全画布暗化 `× 0.6`**：对已绘制的所有像素统一乘以 0.6
-3. 画 18 个关节圆点：在暗化后的画面上画 **完整亮度** 圆点
+**渲染流程**（与 OpenPose 的关键区别在于暗化策略）：
+
+1. 绘制 17 条肢体 — `ellipse2Poly` 椭圆多边形，**完整亮度**
+2. 全画布暗化 **× 0.6**
+3. 绘制 18 个关节圆点 — 完整亮度（从暗色肢体中"弹出"）
 
 **参数**（与上游完全一致）：
-- `stickwidth = 4`，**不缩放**
-- 关节圆半径：固定 `4`
-- 手部边：`cv2.line` thickness=2，HSV 彩虹色；关节：蓝色圆点 radius=4，阈值检查 `> eps(0.01)`
-
-**视觉效果**：关节点从暗色肢体中"弹出"，产生比 OpenPose 更强的关节-肢体亮度对比。这是 Wan 2.1/2.2 模型训练时使用的骨架格式。
+- `stickwidth = 4`，不缩放
+- 关节圆半径固定 `4`
+- 手部边线 thickness=2，HSV 彩虹色；关节蓝色圆点 radius=4
 
 ### 两种模式对比
 
@@ -102,13 +153,12 @@ npm run preview  # 预览构建产物
 | stickwidth 缩放 | 随分辨率自适应 | 固定 4px |
 | 关节半径 | `4 × stickScale` | 固定 4px |
 | 目标模型 | ControlNet (SD/SDXL) | Wan 2.1 / 2.2 |
-| 参考实现 | controlnet_aux | Wan2GP / Alibaba |
 
 ### Mixamo → OpenPose 关键点映射
 
-由于 Mixamo 骨骼命名与 COCO 格式不同，项目在 `src/core/openpose-mapper.ts` 中实现了映射逻辑：
+映射逻辑实现于 `src/core/openpose-mapper.ts`：
 
-| Mixamo 骨骼名 | OpenPose 关键点 |
+| Mixamo 骨骼 | OpenPose 关键点 |
 |:---|:---|
 | `mixamorig_Neck` | neck (1) |
 | `mixamorig_RightArm` | right_shoulder (2) |
@@ -124,42 +174,7 @@ npm run preview  # 预览构建产物
 | `mixamorig_LeftLeg` | left_knee (12) |
 | `mixamorig_LeftFoot` | left_ankle (13) |
 
-面部关键点（nose、eyes、ears）由 `mixamorig_Head` / `mixamorig_HeadTop_End` 推导生成。手部关键点从 `mixamorig_{Left/Right}Hand{Finger}{1-4}` 映射到 21 点手部格式。
-
----
-
-## 技术栈
-
-- **Vue 3** + TypeScript + Vite
-- **Canvas 2D / WebGL** 骨架渲染（双引擎，WebGL 用于高分辨率批量导出）
-- **WebCodecs + mp4-muxer** 视频编码导出
-- **JSZip** PNG 批量打包
-
-## 项目结构
-
-```
-├── src/
-│   ├── core/              # DAE 解析与 OpenPose 关键点映射
-│   │   ├── dae-parser.ts        # COLLADA 文件解析 + ZIP 解包
-│   │   ├── openpose-mapper.ts   # Mixamo → COCO 18-keypoint 映射
-│   │   └── pose-transformer.ts  # 3D→2D 投影、旋转、缩放
-│   ├── renderers/         # 骨架渲染引擎
-│   │   ├── canvas2d/            # Canvas 2D 渲染器
-│   │   │   ├── openpose-renderer.ts  # OpenPose 渲染（对齐 controlnet_aux）
-│   │   │   ├── dwpose-renderer.ts    # DWPose 渲染（对齐 Wan 2.1/2.2）
-│   │   │   └── raw-renderer.ts       # 原始骨骼线条渲染
-│   │   ├── webgl/               # WebGL 渲染器（GPU 加速）
-│   │   └── renderer-factory.ts  # 渲染器工厂
-│   ├── exporters/         # 导出逻辑
-│   ├── composables/       # Vue 组合式函数
-│   ├── components/        # Vue 组件
-│   ├── types/             # TypeScript 类型定义
-│   └── styles/            # 全局样式与 CSS 变量
-├── public/                # 静态资源
-├── index.html
-├── vite.config.ts
-└── package.json
-```
+面部关键点（nose、eyes、ears）由 `mixamorig_Head` / `mixamorig_HeadTop_End` 推导。手部关键点从 `mixamorig_{Left/Right}Hand{Finger}{1-4}` 映射到 21 点格式。
 
 ## 参考链接
 
@@ -169,11 +184,11 @@ npm run preview  # 预览构建产物
 | controlnet_aux (HuggingFace) | https://github.com/huggingface/controlnet_aux |
 | comfyui_controlnet_aux (OpenPose 渲染参考) | https://github.com/Fannovel16/comfyui_controlnet_aux |
 | xinsir ControlNet OpenPose SDXL | https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0 |
-| Wan 2.1 官方仓库 | https://github.com/Wan-Video/Wan2.1 |
+| Wan 2.1 | https://github.com/Wan-Video/Wan2.1 |
 | Wan2GP (DWPose 渲染参考) | https://github.com/deepbeepmeep/Wan2GP |
 | ComfyUI-WanVideoWrapper (DWPose 参考) | https://github.com/kijai/ComfyUI-WanVideoWrapper |
-| CMU OpenPose 原始论文 | https://github.com/CMU-Perceptual-Computing-Lab/openpose |
+| CMU OpenPose | https://github.com/CMU-Perceptual-Computing-Lab/openpose |
 
 ## License
 
-MIT
+[Apache-2.0](LICENSE)
