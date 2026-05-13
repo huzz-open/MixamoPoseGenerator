@@ -1,4 +1,5 @@
 import { ref, readonly } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ParseResult } from '../types/pose'
 import type { SkeletonMode, DirectionEntry } from '../types/config'
 import { cloneFrames, transformFrames } from '../core/pose-transformer'
@@ -13,6 +14,7 @@ export interface DirectionResult {
 let generationId = 0
 
 export function usePoseGenerator() {
+  const { t } = useI18n()
   const renderedDirections = ref<DirectionResult[]>([])
   const isGenerating = ref(false)
   const progress = ref({ current: 0, total: 0, label: '' })
@@ -52,7 +54,7 @@ export function usePoseGenerator() {
 
       if (myId !== generationId) return
       renderedDirections.value = results
-      progress.value = { current: total, total, label: '完成' }
+      progress.value = { current: total, total, label: t('progress.done') }
     } finally {
       if (myId === generationId) {
         isGenerating.value = false

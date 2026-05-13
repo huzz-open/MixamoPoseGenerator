@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import prevFrameIcon from '../../assets/icon/pre-frame.svg'
 import nextFrameIcon from '../../assets/icon/next-frame.svg'
 import playIcon from '../../assets/icon/play.svg'
 import stopIcon from '../../assets/icon/stop.svg'
+
+const { t } = useI18n()
 
 defineProps<{
   currentFrame: number
@@ -40,13 +43,13 @@ function onFpsInput(e: Event) {
     </div>
 
     <div class="controls-center">
-      <button class="ctrl-btn" title="上一帧" @click="emit('prevFrame')">
+      <button class="ctrl-btn" :title="t('controls.prevFrame')" @click="emit('prevFrame')">
         <img :src="prevFrameIcon" class="ctrl-icon" />
       </button>
-      <button class="ctrl-btn" @click="emit('togglePlay')" :title="isPlaying ? '停止' : '播放'">
+      <button class="ctrl-btn" @click="emit('togglePlay')" :title="isPlaying ? t('controls.stop') : t('controls.play')">
         <img :src="isPlaying ? stopIcon : playIcon" class="ctrl-icon play-icon" />
       </button>
-      <button class="ctrl-btn" title="下一帧" @click="emit('nextFrame')">
+      <button class="ctrl-btn" :title="t('controls.nextFrame')" @click="emit('nextFrame')">
         <img :src="nextFrameIcon" class="ctrl-icon" />
       </button>
     </div>

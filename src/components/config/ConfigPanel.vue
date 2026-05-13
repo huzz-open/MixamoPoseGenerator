@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { SkeletonMode, LoopMode, DirectionEntry, DirectionPresetDef } from '../../types/config'
-import { DIRECTION_PRESETS } from '../../types/config'
+import { useI18n } from 'vue-i18n'
+import type { SkeletonMode, LoopMode, DirectionEntry, DirectionPresetRaw } from '../../types/config'
+import { DIRECTION_PRESETS_RAW } from '../../types/config'
 import { useToast } from '../../composables/useToast'
 import addIcon from '../../assets/icon/add.svg'
 import clearIcon from '../../assets/icon/clear.svg'
 
+const { t } = useI18n()
 const { toast } = useToast()
 
 const props = defineProps<{
@@ -51,13 +53,18 @@ const emit = defineEmits<{
 const newDirName = ref('')
 const newDirAngle = ref('')
 
-const skeletonModes: { value: SkeletonMode; label: string; desc: string }[] = [
-  { value: 'raw', label: '原始骨架', desc: '' },
-  { value: 'openpose', label: 'OpenPose', desc: 'ControlNet / Wan-Fun' },
-  { value: 'dwpose', label: 'DWPose', desc: 'Wan 2.1/2.2 Animate' },
+const skeletonModes: { value: SkeletonMode; labelKey: string; desc: string }[] = [
+  { value: 'raw', labelKey: 'config.rawSkeleton', desc: '' },
+  { value: 'openpose', labelKey: '', desc: 'ControlNet / Wan-Fun' },
+  { value: 'dwpose', labelKey: '', desc: 'Wan 2.1/2.2 Animate' },
 ]
 
-function applyPreset(preset: DirectionPresetDef) {
+function getModeLabel(m: { value: SkeletonMode; labelKey: string }) {
+  if (m.labelKey) return t(m.labelKey)
+  return m.value === 'openpose' ? 'OpenPose' : 'DWPose'
+}
+
+function applyPreset(preset: DirectionPresetRaw) {
   const existing = new Set(props.directions.map(d => d.angle))
   const toAdd = preset.directions.filter(pd => !existing.has(pd.angle))
   if (toAdd.length === 0) return
@@ -77,13 +84,13 @@ function clearAllDirections() {
 function addCustomDirection() {
   const raw = Number(newDirAngle.value)
   if (isNaN(raw) || raw < 0 || raw > 359) {
-    toast('请输入 0~359 之间的角度', 'warning')
+    toast(t('config.angleRangeError'), 'warning')
     return
   }
   const angle = Math.round(raw)
   const dup = props.directions.find(d => d.angle === angle)
   if (dup) {
-    toast(`角度 ${angle}° 已存在 (${dup.name})，跳过添加`, 'warning')
+    toast(t('config.angleDuplicate', { angle, name: dup.name }), 'warning')
     return
   }
   const name = newDirName.value.trim() || `${angle}`
@@ -96,14 +103,14 @@ function addCustomDirection() {
 <template>
   <div class="config-panel">
     <section>
-      <h3>方向</h3>
+      <h3>{{ t('config.direction') }}</h3>
       <div class="preset-row">
         <button
-          v-for="preset in DIRECTION_PRESETS"
+          v-for="preset in DIRECTION_PRESETS_RAW"
           :key="preset.id"
           class="preset-btn"
           @click="applyPreset(preset)"
-        >{{ preset.icon }} {{ preset.label }}</button>
+        >{{ preset.icon }} {{ t(preset.labelKey) }}</button>
       </div>
 
       <div class="dir-list-container">
@@ -117,10 +124,10 @@ function addCustomDirection() {
           >
             <span class="dir-angle">{{ idx === currentDirectionIndex && liveViewAngle != null ? liveViewAngle : dir.angle }}°</span>
             <span class="dir-name">{{ dir.name }}</span>
-            <button class="dir-remove" @click.stop="removeDirection(idx)" title="移除">×</button>
+            <button class="dir-remove" @click.stop="removeDirection(idx)" :title="t('config.remove')">×</button>
           </div>
         </div>
-        <div v-else class="dir-empty">未选择任何方向</div>
+        <div v-else class="dir-empty">{{ t('config.noDirections') }}</div>
       </div>
 
       <div class="dir-add-row">
@@ -128,7 +135,7 @@ function addCustomDirection() {
           v-model="newDirAngle"
           type="text"
           inputmode="numeric"
-          placeholder="角度"
+          :placeholder="t('config.anglePlaceholder')"
           class="dir-input"
           style="width:48px; text-align:center"
           @keyup.enter="addCustomDirection"
@@ -136,16 +143,16 @@ function addCustomDirection() {
         <span class="dir-unit">°</span>
         <input
           v-model="newDirName"
-          placeholder="名称(可选)"
+          :placeholder="t('config.namePlaceholder')"
           class="dir-input"
           style="flex:1"
           @keyup.enter="addCustomDirection"
         />
-        <button class="dir-add-btn" @click="addCustomDirection" title="添加方向">
-          <img :src="addIcon" alt="添加" class="dir-add-icon" />
+        <button class="dir-add-btn" @click="addCustomDirection" :title="t('config.addDirection')">
+          <img :src="addIcon" :alt="t('config.add')" class="dir-add-icon" />
         </button>
-        <button class="dir-clear-btn" @click="clearAllDirections" title="清除全部">
-          <img :src="clearIcon" alt="清除" class="dir-clear-icon" />
+        <button class="dir-clear-btn" @click="clearAllDirections" :title="t('config.clearAll')">
+          <img :src="clearIcon" :alt="t('config.clear')" class="dir-clear-icon" />
         </button>
       </div>
     </section>
@@ -153,7 +160,7 @@ function addCustomDirection() {
     <div class="divider" />
 
     <section>
-      <h3>骨架模式</h3>
+      <h3>{{ t('config.skeletonMode') }}</h3>
       <div class="radio-group">
         <label v-for="m in skeletonModes" :key="m.value" class="radio-label">
           <input
@@ -162,7 +169,7 @@ function addCustomDirection() {
             :checked="skeletonMode === m.value"
             @change="emit('update:skeletonMode', m.value)"
           />
-          <span>{{ m.label }}<span v-if="m.desc" class="mode-desc"> ({{ m.desc }})</span></span>
+          <span>{{ getModeLabel(m) }}<span v-if="m.desc" class="mode-desc"> ({{ m.desc }})</span></span>
         </label>
       </div>
       <div v-if="skeletonMode !== 'raw'" class="checkbox-group" style="margin-top:4px">
@@ -172,7 +179,7 @@ function addCustomDirection() {
             :checked="drawHands"
             @change="emit('update:drawHands', ($event.target as HTMLInputElement).checked)"
           />
-          <span>手部关键点</span>
+          <span>{{ t('config.handKeypoints') }}</span>
         </label>
         <label class="checkbox-label">
           <input
@@ -180,10 +187,10 @@ function addCustomDirection() {
             :checked="drawFace"
             @change="emit('update:drawFace', ($event.target as HTMLInputElement).checked)"
           />
-          <span>面部关键点 (68点)</span>
+          <span>{{ t('config.faceKeypoints') }}</span>
         </label>
         <div v-if="drawFace" class="face-scale-row">
-          <span class="face-scale-label">面部比例</span>
+          <span class="face-scale-label">{{ t('config.faceScale') }}</span>
           <input
             type="range"
             min="0.2"
@@ -200,7 +207,7 @@ function addCustomDirection() {
             :checked="xinsrScaling"
             @change="emit('update:xinsrScaling', ($event.target as HTMLInputElement).checked)"
           />
-          <span>SDXL 高分辨率适配 (xinsr)</span>
+          <span>{{ t('config.xinsrScaling') }}</span>
         </label>
       </div>
     </section>
@@ -208,7 +215,7 @@ function addCustomDirection() {
     <div class="divider" />
 
     <section>
-      <h3>导出</h3>
+      <h3>{{ t('config.export') }}</h3>
       <div class="checkbox-group">
         <label class="checkbox-label">
           <input
@@ -216,7 +223,7 @@ function addCustomDirection() {
             :checked="exportPng"
             @change="emit('update:exportPng', ($event.target as HTMLInputElement).checked)"
           />
-          <span>PNG 帧图</span>
+          <span>{{ t('config.pngFrames') }}</span>
         </label>
         <label class="checkbox-label">
           <input
@@ -224,13 +231,13 @@ function addCustomDirection() {
             :checked="exportMp4"
             @change="emit('update:exportMp4', ($event.target as HTMLInputElement).checked)"
           />
-          <span>MP4 骨骼视频 (Wan 2.2)</span>
+          <span>{{ t('config.mp4Video') }}</span>
         </label>
       </div>
 
       <div v-if="exportMp4" class="video-opts">
         <div class="input-row">
-          <span>分辨率:</span>
+          <span>{{ t('config.resolution') }}</span>
           <input type="number" :value="videoWidth" min="128" max="4096" style="width:60px"
                  @input="emit('update:videoWidth', parseInt(($event.target as HTMLInputElement).value) || 720)" />
           <span>x</span>
@@ -245,24 +252,24 @@ function addCustomDirection() {
         <div class="radio-group small">
           <label class="radio-label">
             <input type="radio" value="auto" :checked="loopMode === 'auto'" @change="emit('update:loopMode', 'auto')" />
-            <span>自动(≥81帧)</span>
+            <span>{{ t('config.loopAuto') }}</span>
           </label>
           <label class="radio-label">
             <input type="radio" value="count" :checked="loopMode === 'count'" @change="emit('update:loopMode', 'count')" />
-            <span>循环
+            <span>{{ t('config.loopTimes') }}
               <input type="number" :value="loopCount" min="1" max="20" style="width:40px"
                      :disabled="loopMode !== 'count'"
                      @input="emit('update:loopCount', parseInt(($event.target as HTMLInputElement).value) || 4)" />
-              次
+              {{ t('config.loopTimesUnit') }}
             </span>
           </label>
           <label class="radio-label">
             <input type="radio" value="duration" :checked="loopMode === 'duration'" @change="emit('update:loopMode', 'duration')" />
-            <span>目标
+            <span>{{ t('config.loopTarget') }}
               <input type="number" :value="loopDuration" min="0.5" max="30" step="0.5" style="width:50px"
                      :disabled="loopMode !== 'duration'"
                      @input="emit('update:loopDuration', parseFloat(($event.target as HTMLInputElement).value) || 3.5)" />
-              秒
+              {{ t('config.loopTargetUnit') }}
             </span>
           </label>
         </div>
@@ -274,7 +281,7 @@ function addCustomDirection() {
       :disabled="!hasPreview || isExporting || (!exportPng && !exportMp4)"
       @click="emit('export')"
     >
-      {{ isExporting ? '导出中...' : '导出到磁盘' }}
+      {{ isExporting ? t('config.exporting') : t('config.exportToDisk') }}
     </button>
   </div>
 </template>
@@ -291,7 +298,6 @@ section { display: flex; flex-direction: column; gap: 6px; }
 h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .divider { height: 1px; background: var(--border); margin: 4px 0; }
 
-/* Direction presets */
 .preset-row {
   display: flex;
   gap: 4px;
@@ -321,7 +327,6 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
   filter: brightness(0.9);
 }
 
-/* Direction list container */
 .dir-list-container {
   height: 88px;
   overflow-y: auto;
@@ -387,7 +392,6 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
   justify-content: center;
 }
 
-/* Add direction */
 .dir-add-row {
   display: flex;
   align-items: center;

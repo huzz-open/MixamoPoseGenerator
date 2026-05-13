@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { LogEntry } from '../../composables/useLog'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   entries: readonly LogEntry[]
@@ -63,7 +66,6 @@ watch(() => props.entries.length, async () => {
 
 <template>
   <div class="log-panel" :class="{ collapsed }" :style="panelStyle">
-    <!-- Drag handle (only when expanded) -->
     <div v-if="!collapsed" class="drag-handle" @mousedown="onDragStart">
       <div class="drag-grip" />
     </div>
@@ -71,13 +73,13 @@ watch(() => props.entries.length, async () => {
     <div class="log-header">
       <span class="toggle-area" @click="toggle">
         <span class="toggle-icon">{{ collapsed ? '▸' : '▾' }}</span>
-        <span>日志</span>
+        <span>{{ t('log.title') }}</span>
         <span v-if="collapsed && entries.length > 0" class="badge">{{ entries.length }}</span>
       </span>
       <button
         v-if="entries.length > 0"
         class="clear-btn"
-        title="清空日志"
+        :title="t('log.clear')"
         @click.stop="emit('clear')"
       >✕</button>
     </div>
@@ -92,7 +94,7 @@ watch(() => props.entries.length, async () => {
         <span class="log-time">[{{ entry.time }}]</span>
         <span class="log-msg">{{ entry.message }}</span>
       </div>
-      <div v-if="entries.length === 0" class="log-empty">暂无日志</div>
+      <div v-if="entries.length === 0" class="log-empty">{{ t('log.empty') }}</div>
     </div>
   </div>
 </template>

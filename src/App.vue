@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { SkeletonMode, LoopMode, DirectionEntry } from './types/config'
 import type { ParseResult } from './types/pose'
 import { DEFAULT_DIRECTIONS } from './types/config'
@@ -7,6 +8,7 @@ import { useFileLoader } from './composables/useFileLoader'
 import { usePoseGenerator } from './composables/usePoseGenerator'
 import { usePreview } from './composables/usePreview'
 import { useExport } from './composables/useExport'
+import { setLocale } from './i18n'
 import FileLoader from './components/config/FileLoader.vue'
 import ConfigPanel from './components/config/ConfigPanel.vue'
 import PreviewCanvas from './components/preview/PreviewCanvas.vue'
@@ -16,6 +18,13 @@ import ProgressBar from './components/export/ProgressBar.vue'
 import Toast from './components/Toast.vue'
 import { useToast } from './composables/useToast'
 import { useRotationHistory } from './composables/useRotationHistory'
+
+const { t, locale } = useI18n()
+
+function toggleLocale() {
+  const next = locale.value === 'zh-CN' ? 'en' : 'zh-CN'
+  setLocale(next as 'zh-CN' | 'en')
+}
 
 const { parseResult, animationName, fullFileName, isLoading, error, daeXmlContent, loadFile } = useFileLoader()
 const { renderedDirections, generatePreview, generateForExport } = usePoseGenerator()
@@ -160,8 +169,8 @@ onMounted(() => { document.addEventListener('keydown', onKeyDown) })
 onUnmounted(() => { document.removeEventListener('keydown', onKeyDown) })
 
 function onInvalidFile(fileName: string) {
-  const ext = fileName.split('.').pop()?.toLowerCase() || '未知'
-  toast(`不支持的文件格式 (.${ext})，仅支持 .dae 和 .zip 文件`, 'warning')
+  const ext = fileName.split('.').pop()?.toLowerCase() || '?'
+  toast(t('errors.unsupportedFormat', { ext }), 'warning')
 }
 
 async function onFileSelected(file: File) {
@@ -234,8 +243,9 @@ async function onExport() {
   <div class="app">
     <Toast />
     <header class="app-header">
-      <h1>Mixamo Pose Generator</h1>
-      <span class="version">Web v1.0</span>
+      <h1>{{ t('app.title') }}</h1>
+      <span class="version">{{ t('app.version') }}</span>
+      <button class="lang-btn" @click="toggleLocale">{{ locale === 'zh-CN' ? 'EN' : '中文' }}</button>
     </header>
 
     <div class="app-body">
@@ -358,6 +368,22 @@ async function onExport() {
 }
 .app-header h1 { margin: 0; font-size: 16px; font-weight: 700; }
 .version { font-size: 11px; color: var(--text-secondary); }
+.lang-btn {
+  margin-left: auto;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.lang-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
 .app-body {
   display: flex;
   flex: 1;

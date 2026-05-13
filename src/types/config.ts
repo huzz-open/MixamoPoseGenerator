@@ -41,16 +41,23 @@ export interface ExportConfig {
   video: VideoExportConfig
 }
 
-export const DIRECTION_PRESETS: DirectionPresetDef[] = [
+export interface DirectionPresetRaw {
+  id: string
+  labelKey: string
+  icon: string
+  directions: DirectionEntry[]
+}
+
+export const DIRECTION_PRESETS_RAW: DirectionPresetRaw[] = [
   {
     id: 'single',
-    label: '单方向',
+    labelKey: 'preset.single',
     icon: '→',
     directions: [{ name: 'right', angle: 90 }],
   },
   {
     id: 'two',
-    label: '左右',
+    labelKey: 'preset.two',
     icon: '←→',
     directions: [
       { name: 'right', angle: 90 },
@@ -59,7 +66,7 @@ export const DIRECTION_PRESETS: DirectionPresetDef[] = [
   },
   {
     id: 'four',
-    label: '四方向',
+    labelKey: 'preset.four',
     icon: '✛',
     directions: [
       { name: 'down', angle: 0 },
@@ -70,7 +77,7 @@ export const DIRECTION_PRESETS: DirectionPresetDef[] = [
   },
   {
     id: 'eight',
-    label: '八方向',
+    labelKey: 'preset.eight',
     icon: '✺',
     directions: [
       { name: 'down', angle: 0 },

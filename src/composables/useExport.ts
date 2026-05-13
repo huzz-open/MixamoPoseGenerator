@@ -1,4 +1,5 @@
 import { ref, readonly } from 'vue'
+import { useI18n } from 'vue-i18n'
 import JSZip from 'jszip'
 import type { DirectionResult } from './usePoseGenerator'
 import { exportMp4 } from '../exporters/video-exporter'
@@ -26,6 +27,7 @@ export interface ExportOptions {
 }
 
 export function useExport() {
+  const { t } = useI18n()
   const isExporting = ref(false)
   const exportProgress = ref({ current: 0, total: 0, label: '' })
 
@@ -55,7 +57,7 @@ export function useExport() {
       if (opts.mp4 && opts.mp4Directions) {
         const dirs = opts.mp4Directions
         for (const dir of dirs) {
-          exportProgress.value = { current: 0, total: dir.frames.length, label: `MP4 ${dir.name}: 编码中...` }
+          exportProgress.value = { current: 0, total: dir.frames.length, label: `MP4 ${dir.name}: ${t('progress.encoding')}` }
 
           let frames = dir.frames
           if (opts.targetFrames > frames.length) {
@@ -80,7 +82,7 @@ export function useExport() {
         }
       }
 
-      exportProgress.value = { current: 0, total: 0, label: '打包 ZIP...' }
+      exportProgress.value = { current: 0, total: 0, label: t('progress.packingZip') }
       const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
       downloadBlob(zipBlob, `${folder}.zip`)
     } finally {

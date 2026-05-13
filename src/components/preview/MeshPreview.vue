@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as THREE from 'three'
 import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -20,6 +21,8 @@ import playIcon from '../../assets/icon/play.svg'
 import stopIcon from '../../assets/icon/stop.svg'
 import undoIcon from '../../assets/icon/undo.svg'
 import redoIcon from '../../assets/icon/redo.svg'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   daeXml: string | null
@@ -313,7 +316,7 @@ function loadFromXml(xml: string) {
 
     loading.value = false
     if (!parsed) {
-      errorMsg.value = 'ColladaLoader 解析返回空'
+      errorMsg.value = t('meshPreview.parseEmpty')
       return
     }
 
@@ -369,7 +372,7 @@ function loadFromXml(xml: string) {
     modelHeight = size.y > 0.001 ? size.y : 1
 
     hasSkin.value = (meshCount + skinnedCount) > 0
-    debugInfo.value = `网格: ${meshCount + skinnedCount} | 顶点: ${vertexCount} | 骨骼: ${boneCount}`
+    debugInfo.value = t('meshPreview.debugInfo', { meshes: meshCount + skinnedCount, vertices: vertexCount, bones: boneCount })
 
     modelRoot = root
     modelGroup = new THREE.Group()
@@ -416,7 +419,7 @@ function loadFromXml(xml: string) {
     }
   } catch (e: any) {
     loading.value = false
-    errorMsg.value = `解析失败: ${(e as Error).message}`
+    errorMsg.value = t('meshPreview.parseFailed', { msg: (e as Error).message })
     console.error('[MeshPreview] Parse error:', e)
   }
 }
@@ -630,9 +633,9 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
 <template>
   <div class="mesh-wrapper">
     <div ref="containerRef" class="mesh-viewport">
-      <div v-if="loading" class="overlay">加载 3D 模型中...</div>
+      <div v-if="loading" class="overlay">{{ t('meshPreview.loading3D') }}</div>
       <div v-if="errorMsg" class="overlay error">{{ errorMsg }}</div>
-      <div v-if="!daeXml && !loading" class="overlay">加载带皮肤的 DAE/ZIP 以预览 3D 模型</div>
+      <div v-if="!daeXml && !loading" class="overlay">{{ t('meshPreview.emptyHint') }}</div>
       <div v-if="debugInfo" class="info-badge">{{ debugInfo }}</div>
 
       <canvas ref="poseOverlayRef" class="pose-overlay" />
@@ -646,7 +649,7 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
           <button
             class="tb-btn" :class="{ active: showSkin, disabled: !hasSkin }"
             :disabled="!hasSkin"
-            :title="hasSkin ? '显示/隐藏皮肤' : '当前文件无皮肤数据'"
+            :title="hasSkin ? t('meshPreview.showHideSkin') : t('meshPreview.noSkinData')"
             @click="hasSkin && (showSkin = !showSkin)"
           ><img :src="skinIcon" class="tb-icon" /></button>
           <transition name="slider-fade">
@@ -654,7 +657,7 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
               <input
                 type="range"
                 class="tb-h-slider"
-                title="Pose 不透明度"
+                :title="t('meshPreview.poseOpacity')"
                 min="0" max="100" step="1"
                 :value="Math.round(poseOpacity * 100)"
                 @input="poseOpacity = parseInt(($event.target as HTMLInputElement).value) / 100"
@@ -666,19 +669,19 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
 
         <button
           class="tb-btn" :class="{ active: inPlace }"
-          title="原地播放：固定角色位置不位移"
+          :title="t('meshPreview.inPlace')"
           @click="inPlace = !inPlace"
         ><img :src="inPlaceIcon" class="tb-icon" /></button>
 
         <button
           class="tb-btn" :class="{ active: lockRotation }"
-          title="锁定垂直旋转：仅允许水平方向旋转相机，防止视角上下倾斜"
+          :title="t('meshPreview.lockRotation')"
           @click="lockRotation = !lockRotation"
         ><img :src="lockIcon" class="tb-icon" /></button>
 
         <button
           class="tb-btn" :class="{ active: showAxes }"
-          title="显示/隐藏坐标轴"
+          :title="t('meshPreview.showHideAxes')"
           @click="showAxes = !showAxes"
         ><img :src="axesIcon" class="tb-icon" /></button>
 
@@ -686,13 +689,13 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
 
         <button
           class="tb-btn"
-          title="适应窗口：自动调整相机以显示完整模型"
+          :title="t('meshPreview.fitToView')"
           @click="fitToView"
         ><img :src="fitViewIcon" class="tb-icon" /></button>
 
         <button
           class="tb-btn"
-          title="重置旋转：将相机恢复到水平视角"
+          :title="t('meshPreview.resetRotation')"
           @click="resetRotation"
         ><img :src="resetIcon" class="tb-icon" /></button>
 
@@ -702,7 +705,7 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
           class="tb-btn"
           :class="{ disabled: !canUndo }"
           :disabled="!canUndo"
-          title="撤销旋转 (Ctrl+Z)"
+          :title="t('meshPreview.undoRotation')"
           @click="emit('undo')"
         ><img :src="undoIcon" class="tb-icon" /></button>
 
@@ -710,7 +713,7 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
           class="tb-btn"
           :class="{ disabled: !canRedo }"
           :disabled="!canRedo"
-          title="重做旋转 (Ctrl+Shift+Z)"
+          :title="t('meshPreview.redoRotation')"
           @click="emit('redo')"
         ><img :src="redoIcon" class="tb-icon" /></button>
 
@@ -720,13 +723,13 @@ watch([() => props.skeletonMode, () => props.drawHands, () => props.drawFace, ()
       </div>
 
       <div v-if="daeXml && frameCount > 0" class="playback-bar">
-        <button class="pb-btn" title="上一帧" @click="emit('prevFrame')">
+        <button class="pb-btn" :title="t('controls.prevFrame')" @click="emit('prevFrame')">
           <img :src="prevFrameIcon" class="pb-icon" />
         </button>
-        <button class="pb-btn" :title="playing ? '停止' : '播放'" @click="emit('togglePlay')">
+        <button class="pb-btn" :title="playing ? t('controls.stop') : t('controls.play')" @click="emit('togglePlay')">
           <img :src="playing ? stopIcon : playIcon" class="pb-icon pb-play" />
         </button>
-        <button class="pb-btn" title="下一帧" @click="emit('nextFrame')">
+        <button class="pb-btn" :title="t('controls.nextFrame')" @click="emit('nextFrame')">
           <img :src="nextFrameIcon" class="pb-icon" />
         </button>
 

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   canvas: HTMLCanvasElement | null
@@ -68,7 +71,6 @@ function onWheel(e: WheelEvent) {
   const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom + delta * oldZoom))
 
-  // Zoom toward cursor position
   const cx = cw / 2 + panX.value
   const cy = ch / 2 + panY.value
   const factor = newZoom / oldZoom
@@ -133,7 +135,7 @@ onUnmounted(() => ro?.disconnect())
     <canvas ref="displayCanvas" class="display-canvas" />
 
     <div v-if="!canvas" class="empty-state">
-      加载 DAE/ZIP 文件以预览
+      {{ t('preview.emptyHint') }}
     </div>
 
     <div v-if="canvas" class="zoom-badge" :class="{ 'is-default': zoom === 1 }">

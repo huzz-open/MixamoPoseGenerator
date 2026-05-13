@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   fileSelected: [file: File]
@@ -91,25 +94,24 @@ const fileTypeLabel = computed(() => isZip.value ? 'ZIP' : 'DAE')
       @change="onFileChange"
     />
 
-    <!-- All layers stacked via absolute positioning; only active layer visible -->
     <div class="layer" :class="{ active: state === 'empty' && !isDragOver }">
       <span class="upload-icon">⬆</span>
       <div class="text-group">
-        <span>拖放 DAE/ZIP 文件到此处</span>
-        <span class="hint">或点击浏览</span>
+        <span>{{ t('fileLoader.dropHint') }}</span>
+        <span class="hint">{{ t('fileLoader.clickHint') }}</span>
       </div>
     </div>
 
     <div class="layer" :class="{ active: isDragOver }">
       <span class="replace-icon">↻</span>
       <div class="text-group">
-        <span>{{ fileName ? '释放以替换文件' : '释放以加载文件' }}</span>
+        <span>{{ fileName ? t('fileLoader.dropToReplace') : t('fileLoader.dropToLoad') }}</span>
       </div>
     </div>
 
     <div class="layer" :class="{ active: state === 'loading' && !isDragOver }">
       <span class="spinner" />
-      <span>解析中...</span>
+      <span>{{ t('fileLoader.parsing') }}</span>
     </div>
 
     <div class="layer" :class="{ active: state === 'loaded' && !isDragOver }">
@@ -118,7 +120,7 @@ const fileTypeLabel = computed(() => isZip.value ? 'ZIP' : 'DAE')
         <span class="file-name" :title="fileName">{{ fileName }}</span>
         <span class="file-meta">
           <span class="file-type-badge" :class="isZip ? 'zip' : 'dae'">{{ fileTypeLabel }}</span>
-          <span class="frame-count">{{ frameCount }} 帧</span>
+          <span class="frame-count">{{ t('fileLoader.frames', { n: frameCount }) }}</span>
         </span>
       </div>
     </div>
