@@ -4,6 +4,24 @@ export type ExportFormat = 'png' | 'mp4'
 
 export type LoopMode = 'auto' | 'count' | 'duration'
 
+export interface AspectRatioPreset {
+  id: string
+  label: string
+  w: number
+  h: number
+}
+
+export const ASPECT_RATIO_PRESETS: AspectRatioPreset[] = [
+  { id: '1:1', label: '1:1', w: 1, h: 1 },
+  { id: '3:4', label: '3:4', w: 3, h: 4 },
+  { id: '2:3', label: '2:3', w: 2, h: 3 },
+  { id: '9:16', label: '9:16', w: 9, h: 16 },
+  { id: '4:3', label: '4:3', w: 4, h: 3 },
+  { id: '3:2', label: '3:2', w: 3, h: 2 },
+  { id: '16:9', label: '16:9', w: 16, h: 9 },
+  { id: 'custom', label: 'Custom', w: 0, h: 0 },
+]
+
 export interface DirectionEntry {
   name: string
   angle: number
@@ -21,7 +39,6 @@ export interface RenderConfig {
   drawHands: boolean
   drawFace: boolean
   xinsrScaling: boolean
-  scale: number
   width: number
   height: number
 }

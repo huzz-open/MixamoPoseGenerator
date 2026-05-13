@@ -41,16 +41,31 @@ const drawHands = ref(true)
 const drawFace = ref(true)
 const faceScale = ref(0.55)
 const xinsrScaling = ref(false)
-const scale = ref(2.0)
 const exportPng = ref(true)
 const exportMp4 = ref(false)
-const videoWidth = ref(720)
-const videoHeight = ref(1280)
+const aspectRatio = ref('1:1')
+const exportWidth = ref(512)
+const exportHeight = ref(512)
 const videoFps = ref(24)
 const loopMode = ref<LoopMode>('auto')
 const loopCount = ref(4)
 const loopDuration = ref(3.5)
 const liveViewAngle = ref<number | null>(null)
+
+const PREVIEW_MAX = 512
+const previewDimensions = computed(() => {
+  const w = exportWidth.value
+  const h = exportHeight.value
+  if (w >= h) {
+    const pw = PREVIEW_MAX
+    const ph = Math.round(PREVIEW_MAX * h / w)
+    return { width: pw, height: ph }
+  } else {
+    const ph = PREVIEW_MAX
+    const pw = Math.round(PREVIEW_MAX * w / h)
+    return { width: pw, height: ph }
+  }
+})
 
 const currentYAngle = computed(() => {
   const dirs = renderedDirections.value
@@ -94,13 +109,15 @@ watch(error, (e) => {
 async function triggerPreview(autoPlay = false) {
   if (!parseResult.value || activeDirections.value.length === 0) return
   const wasPlaying = preview.isPlaying.value
-  console.info(`生成预览 (${activeDirections.value.length}方向, ${skeletonMode.value})`)
+  const { width: pw, height: ph } = previewDimensions.value
+  console.info(`生成预览 (${activeDirections.value.length}方向, ${skeletonMode.value}, ${pw}x${ph})`)
   await generatePreview(
     parseResult.value as ParseResult,
     activeDirections.value,
     skeletonMode.value,
     renderOpts.value,
-    scale.value,
+    pw,
+    ph,
   )
   if (renderedDirections.value.length > 0) {
     const dirs = renderedDirections.value
@@ -114,7 +131,7 @@ watch(parseResult, (result) => {
   if (result) triggerPreview(true)
 })
 
-watch([activeDirections, skeletonMode, drawHands, drawFace, faceScale, xinsrScaling], () => {
+watch([activeDirections, skeletonMode, drawHands, drawFace, faceScale, xinsrScaling, exportWidth, exportHeight], () => {
   if (parseResult.value) triggerPreview()
 }, { deep: true })
 
@@ -206,32 +223,37 @@ async function onExport() {
     return
   }
 
-  const wantMp4 = exportMp4.value && parseResult.value
-  let mp4Dirs: any[] | undefined
+  const ew = exportWidth.value
+  const eh = exportHeight.value
+  const { width: pw, height: ph } = previewDimensions.value
+  const needFullRes = ew !== pw || eh !== ph
 
-  if (wantMp4) {
-    console.info('开始渲染高分辨率帧...')
-    mp4Dirs = await generateForExport(
+  const wantPng = exportPng.value
+  const wantMp4 = exportMp4.value && parseResult.value
+
+  let fullDirs: any[] | undefined
+  if ((wantPng && needFullRes) || wantMp4) {
+    console.info(`开始渲染全分辨率帧 (${ew}x${eh})...`)
+    fullDirs = await generateForExport(
       parseResult.value as ParseResult,
       activeDirections.value,
       skeletonMode.value,
       renderOpts.value,
-      scale.value,
-      videoWidth.value,
-      videoHeight.value,
+      ew,
+      eh,
       (cur, total, dir) => console.info(`渲染 ${dir}: ${cur}/${total}`),
     ) as any[]
   }
 
   console.info('开始打包导出...')
   await exportAll({
-    png: exportPng.value,
+    png: wantPng,
     mp4: !!wantMp4,
-    pngDirections: renderedDirections.value as any[],
-    mp4Directions: mp4Dirs,
+    pngDirections: (wantPng && fullDirs) ? fullDirs : renderedDirections.value as any[],
+    mp4Directions: wantMp4 ? fullDirs : undefined,
     animationName: animationName.value,
-    videoWidth: videoWidth.value,
-    videoHeight: videoHeight.value,
+    videoWidth: ew,
+    videoHeight: eh,
     videoFps: videoFps.value,
     targetFrames: wantMp4 ? computeTargetFrames(parseResult.value!.frameCount, videoFps.value) : 0,
   })
@@ -269,8 +291,9 @@ async function onExport() {
           :xinsr-scaling="xinsrScaling"
           :export-png="exportPng"
           :export-mp4="exportMp4"
-          :video-width="videoWidth"
-          :video-height="videoHeight"
+          :aspect-ratio="aspectRatio"
+          :export-width="exportWidth"
+          :export-height="exportHeight"
           :video-fps="videoFps"
           :loop-mode="loopMode"
           :loop-count="loopCount"
@@ -286,8 +309,9 @@ async function onExport() {
           @update:xinsr-scaling="xinsrScaling = $event"
           @update:export-png="exportPng = $event"
           @update:export-mp4="exportMp4 = $event"
-          @update:video-width="videoWidth = $event"
-          @update:video-height="videoHeight = $event"
+          @update:aspect-ratio="aspectRatio = $event"
+          @update:export-width="exportWidth = $event"
+          @update:export-height="exportHeight = $event"
           @update:video-fps="videoFps = $event"
           @update:loop-mode="loopMode = $event"
           @update:loop-count="loopCount = $event"

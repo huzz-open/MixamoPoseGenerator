@@ -30,6 +30,8 @@ export default {
     export: 'Export',
     pngFrames: 'PNG frames',
     mp4Video: 'MP4 skeleton video (Wan 2.2)',
+    aspectRatio: 'Aspect Ratio',
+    customRatio: 'Custom',
     resolution: 'Resolution:',
     loopAuto: 'Auto (≥81 frames)',
     loopTimes: 'Loop',

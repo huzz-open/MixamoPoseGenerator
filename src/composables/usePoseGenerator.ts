@@ -24,8 +24,8 @@ export function usePoseGenerator() {
     directions: DirectionEntry[],
     mode: SkeletonMode,
     opts: RenderOptions,
-    scale: number,
-    previewSize: number = 512,
+    previewWidth: number = 512,
+    previewHeight: number = 512,
   ) {
     const myId = ++generationId
     isGenerating.value = true
@@ -40,11 +40,11 @@ export function usePoseGenerator() {
         progress.value = { current: idx, total, label: dirName }
 
         const fc = cloneFrames(parseResult.frames)
-        transformFrames(fc, previewSize, previewSize, [0, yAngle, 0], scale)
+        transformFrames(fc, previewWidth, previewHeight, [0, yAngle, 0])
 
         const canvases: HTMLCanvasElement[] = []
         for (const joints of fc) {
-          canvases.push(renderFrame(mode, joints, parseResult.bones, previewSize, previewSize, opts))
+          canvases.push(renderFrame(mode, joints, parseResult.bones, previewWidth, previewHeight, opts))
         }
 
         results.push({ name: dirName, frames: canvases })
@@ -67,7 +67,6 @@ export function usePoseGenerator() {
     directions: DirectionEntry[],
     mode: SkeletonMode,
     opts: RenderOptions,
-    scale: number,
     width: number,
     height: number,
     onProgress?: (current: number, total: number, dir: string) => void,
@@ -77,7 +76,7 @@ export function usePoseGenerator() {
     for (let idx = 0; idx < directions.length; idx++) {
       const { name: dirName, angle: yAngle } = directions[idx]
       const fc = cloneFrames(parseResult.frames)
-      transformFrames(fc, width, height, [0, yAngle, 0], scale)
+      transformFrames(fc, width, height, [0, yAngle, 0])
 
       const canvases: HTMLCanvasElement[] = []
       for (let i = 0; i < fc.length; i++) {

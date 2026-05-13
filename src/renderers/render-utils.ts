@@ -101,6 +101,7 @@ export function createBlackCanvas(width: number, height: number): [HTMLCanvasEle
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')!
+  ctx.imageSmoothingEnabled = false
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, width, height)
   return [canvas, ctx]
@@ -109,7 +110,28 @@ export function createBlackCanvas(width: number, height: number): [HTMLCanvasEle
 export function createOffscreenBlack(width: number, height: number): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] {
   const canvas = new OffscreenCanvas(width, height)
   const ctx = canvas.getContext('2d')!
+  ctx.imageSmoothingEnabled = false
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, width, height)
   return [canvas, ctx]
+}
+
+/**
+ * Strip alpha channel: re-draw onto a fresh black canvas to flatten
+ * any semi-transparent anti-aliased pixels to opaque RGB values.
+ * This ensures ControlNet models see pure RGB data identical to
+ * what OpenCV's cv2.imencode produces.
+ */
+export function flattenToRGB(source: HTMLCanvasElement): HTMLCanvasElement {
+  const w = source.width
+  const h = source.height
+  const out = document.createElement('canvas')
+  out.width = w
+  out.height = h
+  const ctx = out.getContext('2d')!
+  ctx.imageSmoothingEnabled = false
+  ctx.fillStyle = '#000'
+  ctx.fillRect(0, 0, w, h)
+  ctx.drawImage(source, 0, 0)
+  return out
 }

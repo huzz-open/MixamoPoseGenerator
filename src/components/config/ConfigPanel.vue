@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { SkeletonMode, LoopMode, DirectionEntry, DirectionPresetRaw } from '../../types/config'
-import { DIRECTION_PRESETS_RAW } from '../../types/config'
+import type { SkeletonMode, LoopMode, DirectionEntry, DirectionPresetRaw, AspectRatioPreset } from '../../types/config'
+import { DIRECTION_PRESETS_RAW, ASPECT_RATIO_PRESETS } from '../../types/config'
 import { useToast } from '../../composables/useToast'
 import addIcon from '../../assets/icon/add.svg'
 import clearIcon from '../../assets/icon/clear.svg'
@@ -20,8 +20,9 @@ const props = defineProps<{
   xinsrScaling: boolean
   exportPng: boolean
   exportMp4: boolean
-  videoWidth: number
-  videoHeight: number
+  aspectRatio: string
+  exportWidth: number
+  exportHeight: number
   videoFps: number
   loopMode: LoopMode
   loopCount: number
@@ -41,14 +42,52 @@ const emit = defineEmits<{
   'update:xinsrScaling': [value: boolean]
   'update:exportPng': [value: boolean]
   'update:exportMp4': [value: boolean]
-  'update:videoWidth': [value: number]
-  'update:videoHeight': [value: number]
+  'update:aspectRatio': [value: string]
+  'update:exportWidth': [value: number]
+  'update:exportHeight': [value: number]
   'update:videoFps': [value: number]
   'update:loopMode': [value: LoopMode]
   'update:loopCount': [value: number]
   'update:loopDuration': [value: number]
   export: []
 }>()
+
+function isCustomRatio(): boolean {
+  return props.aspectRatio === 'custom'
+}
+
+function onSelectRatio(preset: AspectRatioPreset) {
+  emit('update:aspectRatio', preset.id)
+  if (preset.id !== 'custom') {
+    const currentMax = Math.max(props.exportWidth, props.exportHeight)
+    const base = currentMax || 512
+    if (preset.w >= preset.h) {
+      emit('update:exportWidth', base)
+      emit('update:exportHeight', Math.round(base * preset.h / preset.w))
+    } else {
+      emit('update:exportHeight', base)
+      emit('update:exportWidth', Math.round(base * preset.w / preset.h))
+    }
+  }
+}
+
+function onWidthInput(val: number) {
+  const w = val || 512
+  emit('update:exportWidth', w)
+  if (!isCustomRatio()) {
+    const preset = ASPECT_RATIO_PRESETS.find(p => p.id === props.aspectRatio)
+    if (preset) emit('update:exportHeight', Math.round(w * preset.h / preset.w))
+  }
+}
+
+function onHeightInput(val: number) {
+  const h = val || 512
+  emit('update:exportHeight', h)
+  if (!isCustomRatio()) {
+    const preset = ASPECT_RATIO_PRESETS.find(p => p.id === props.aspectRatio)
+    if (preset) emit('update:exportWidth', Math.round(h * preset.w / preset.h))
+  }
+}
 
 const newDirName = ref('')
 const newDirAngle = ref('')
@@ -235,44 +274,60 @@ function addCustomDirection() {
         </label>
       </div>
 
-      <div v-if="exportMp4" class="video-opts">
+      <div class="export-opts">
+        <div class="ratio-section">
+          <span class="opt-label">{{ t('config.aspectRatio') }}</span>
+          <div class="ratio-btns">
+            <button
+              v-for="preset in ASPECT_RATIO_PRESETS"
+              :key="preset.id"
+              class="ratio-btn"
+              :class="{ active: aspectRatio === preset.id }"
+              @click="onSelectRatio(preset)"
+            >{{ preset.id === 'custom' ? t('config.customRatio') : preset.label }}</button>
+          </div>
+        </div>
         <div class="input-row">
           <span>{{ t('config.resolution') }}</span>
-          <input type="number" :value="videoWidth" min="128" max="4096" style="width:60px"
-                 @input="emit('update:videoWidth', parseInt(($event.target as HTMLInputElement).value) || 720)" />
-          <span>x</span>
-          <input type="number" :value="videoHeight" min="128" max="4096" style="width:60px"
-                 @input="emit('update:videoHeight', parseInt(($event.target as HTMLInputElement).value) || 1280)" />
+          <input type="number" :value="exportWidth" min="128" max="4096" style="width:60px"
+                 @input="onWidthInput(parseInt(($event.target as HTMLInputElement).value))" />
+          <span>×</span>
+          <input type="number" :value="exportHeight" min="128" max="4096" style="width:60px"
+                 :class="{ 'input-locked': !isCustomRatio() }"
+                 @input="onHeightInput(parseInt(($event.target as HTMLInputElement).value))" />
         </div>
-        <div class="input-row">
-          <span>FPS:</span>
-          <input type="number" :value="videoFps" min="12" max="60" style="width:50px"
-                 @input="emit('update:videoFps', parseInt(($event.target as HTMLInputElement).value) || 24)" />
-        </div>
-        <div class="radio-group small">
-          <label class="radio-label">
-            <input type="radio" value="auto" :checked="loopMode === 'auto'" @change="emit('update:loopMode', 'auto')" />
-            <span>{{ t('config.loopAuto') }}</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" value="count" :checked="loopMode === 'count'" @change="emit('update:loopMode', 'count')" />
-            <span>{{ t('config.loopTimes') }}
-              <input type="number" :value="loopCount" min="1" max="20" style="width:40px"
-                     :disabled="loopMode !== 'count'"
-                     @input="emit('update:loopCount', parseInt(($event.target as HTMLInputElement).value) || 4)" />
-              {{ t('config.loopTimesUnit') }}
-            </span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" value="duration" :checked="loopMode === 'duration'" @change="emit('update:loopMode', 'duration')" />
-            <span>{{ t('config.loopTarget') }}
-              <input type="number" :value="loopDuration" min="0.5" max="30" step="0.5" style="width:50px"
-                     :disabled="loopMode !== 'duration'"
-                     @input="emit('update:loopDuration', parseFloat(($event.target as HTMLInputElement).value) || 3.5)" />
-              {{ t('config.loopTargetUnit') }}
-            </span>
-          </label>
-        </div>
+
+        <template v-if="exportMp4">
+          <div class="input-row">
+            <span>FPS:</span>
+            <input type="number" :value="videoFps" min="12" max="60" style="width:50px"
+                   @input="emit('update:videoFps', parseInt(($event.target as HTMLInputElement).value) || 24)" />
+          </div>
+          <div class="radio-group small">
+            <label class="radio-label">
+              <input type="radio" value="auto" :checked="loopMode === 'auto'" @change="emit('update:loopMode', 'auto')" />
+              <span>{{ t('config.loopAuto') }}</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" value="count" :checked="loopMode === 'count'" @change="emit('update:loopMode', 'count')" />
+              <span>{{ t('config.loopTimes') }}
+                <input type="number" :value="loopCount" min="1" max="20" style="width:40px"
+                       :disabled="loopMode !== 'count'"
+                       @input="emit('update:loopCount', parseInt(($event.target as HTMLInputElement).value) || 4)" />
+                {{ t('config.loopTimesUnit') }}
+              </span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" value="duration" :checked="loopMode === 'duration'" @change="emit('update:loopMode', 'duration')" />
+              <span>{{ t('config.loopTarget') }}
+                <input type="number" :value="loopDuration" min="0.5" max="30" step="0.5" style="width:50px"
+                       :disabled="loopMode !== 'duration'"
+                       @input="emit('update:loopDuration', parseFloat(($event.target as HTMLInputElement).value) || 3.5)" />
+                {{ t('config.loopTargetUnit') }}
+              </span>
+            </label>
+          </div>
+        </template>
       </div>
     </section>
 
@@ -464,10 +519,44 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .face-scale-row input[type=range] { flex: 1; height: 4px; accent-color: var(--accent); cursor: pointer; }
 .face-scale-label { white-space: nowrap; }
 .face-scale-value { font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
-.video-opts {
+.export-opts {
   display: flex; flex-direction: column; gap: 6px;
   padding: 8px; background: var(--bg-secondary); border-radius: 6px;
   margin-top: 4px;
+}
+.ratio-section {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.opt-label {
+  font-size: 12px; color: var(--text-secondary);
+}
+.ratio-btns {
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.ratio-btn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+.ratio-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent, #4a9eff);
+}
+.ratio-btn.active {
+  color: #fff;
+  background: var(--accent, #4a9eff);
+  border-color: var(--accent, #4a9eff);
+}
+.input-locked {
+  opacity: 0.6;
 }
 .input-row {
   display: flex; align-items: center; gap: 6px; font-size: 12px;

@@ -30,6 +30,8 @@ export default {
     export: '导出',
     pngFrames: 'PNG 帧图',
     mp4Video: 'MP4 骨骼视频 (Wan 2.2)',
+    aspectRatio: '画面比例',
+    customRatio: '自定义',
     resolution: '分辨率:',
     loopAuto: '自动(≥81帧)',
     loopTimes: '循环',

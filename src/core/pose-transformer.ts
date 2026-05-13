@@ -66,44 +66,64 @@ export function cloneFrames(frames: FrameData[]): FrameData[] {
   })
 }
 
+const AUTO_FIT_PADDING = 0.05
+
 /**
- * Apply rotation, scaling, and centering to raw joint positions.
- * Matches Python apply_transform_to_frames exactly.
+ * Apply rotation, auto-fit scaling, and centering to raw joint positions.
+ * Automatically scales the skeleton to fill the canvas (with 5% padding),
+ * using a consistent scale across all frames for stable animation.
  */
 export function transformFrames(
   frames: FrameData[],
   canvasWidth: number,
   canvasHeight: number,
   rotation: [number, number, number],
-  scale: number,
 ): FrameData[] {
   const R = buildRotationMatrix(rotation[0], rotation[1], rotation[2])
 
-  // Phase 1: scale + rotate
+  // Phase 1: rotate (no scaling yet)
   for (const frame of frames) {
     for (const [joint, pos] of frame) {
-      const scaled: Vec3 = [pos[0] * scale, pos[1] * scale, pos[2] * scale]
-      frame.set(joint, applyRotation(R, scaled))
+      frame.set(joint, applyRotation(R, pos))
     }
   }
 
-  // Phase 2: center
-  const cx = Math.floor(canvasWidth / 2)
-  const cy = Math.floor(canvasHeight / 2)
+  // Phase 2: compute global bounding box across ALL frames for stable animation
+  let minX = Infinity, maxX = -Infinity
+  let minY = Infinity, maxY = -Infinity
+  for (const frame of frames) {
+    for (const pos of frame.values()) {
+      if (pos[0] < minX) minX = pos[0]
+      if (pos[0] > maxX) maxX = pos[0]
+      if (pos[1] < minY) minY = pos[1]
+      if (pos[1] > maxY) maxY = pos[1]
+    }
+  }
+
+  const rangeX = maxX - minX
+  const rangeY = maxY - minY
+  if (rangeX <= 0 && rangeY <= 0) return frames
+
+  // Phase 3: auto-fit scale to fill canvas with padding
+  const usableW = canvasWidth * (1 - AUTO_FIT_PADDING * 2)
+  const usableH = canvasHeight * (1 - AUTO_FIT_PADDING * 2)
+  const scaleX = rangeX > 0 ? usableW / rangeX : Infinity
+  const scaleY = rangeY > 0 ? usableH / rangeY : Infinity
+  const autoScale = Math.min(scaleX, scaleY)
+
+  // Phase 4: scale + center each frame
+  const cx = canvasWidth / 2
+  const cy = canvasHeight / 2
+  const bboxCx = (minX + maxX) / 2
+  const bboxCy = (minY + maxY) / 2
 
   for (const frame of frames) {
-    const pts = Array.from(frame.values())
-    if (pts.length === 0) continue
-
-    let sumX = 0, sumY = 0
-    for (const p of pts) { sumX += p[0]; sumY += p[1] }
-    const avgX = sumX / pts.length
-    const avgY = sumY / pts.length
-    const dx = cx - avgX
-    const dy = cy - avgY
-
     for (const [joint, pos] of frame) {
-      frame.set(joint, [pos[0] + dx, pos[1] + dy, pos[2]])
+      frame.set(joint, [
+        (pos[0] - bboxCx) * autoScale + cx,
+        (pos[1] - bboxCy) * autoScale + cy,
+        pos[2] * autoScale,
+      ])
     }
   }
 

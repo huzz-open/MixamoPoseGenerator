@@ -4,10 +4,12 @@ import JSZip from 'jszip'
 import type { DirectionResult } from './usePoseGenerator'
 import { exportMp4 } from '../exporters/video-exporter'
 import { downloadBlob } from '../exporters/png-exporter'
+import { flattenToRGB } from '../renderers/render-utils'
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  const rgb = flattenToRGB(canvas)
   return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => {
+    rgb.toBlob(blob => {
       if (blob) resolve(blob)
       else reject(new Error('Failed to create blob from canvas'))
     }, 'image/png')
