@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { SkeletonMode, LoopMode, DirectionEntry } from './types/config'
+import type { SkeletonMode, DirectionEntry } from './types/config'
 import type { ParseResult } from './types/pose'
 import { DEFAULT_DIRECTIONS } from './types/config'
 import { useFileLoader } from './composables/useFileLoader'
@@ -47,9 +47,7 @@ const aspectRatio = ref('1:1')
 const exportWidth = ref(512)
 const exportHeight = ref(512)
 const videoFps = ref(24)
-const loopMode = ref<LoopMode>('auto')
-const loopCount = ref(4)
-const loopDuration = ref(3.5)
+const targetFrames = ref(81)
 const liveViewAngle = ref<number | null>(null)
 
 const PREVIEW_MAX = 512
@@ -205,16 +203,10 @@ async function onFileSelected(file: File) {
   }
 }
 
-function computeTargetFrames(srcCount: number, fps: number): number {
-  if (loopMode.value === 'count') {
-    return srcCount * Math.max(1, loopCount.value)
-  }
-  if (loopMode.value === 'duration') {
-    const raw = Math.ceil(loopDuration.value * fps)
-    return raw > srcCount ? Math.ceil(raw / srcCount) * srcCount : srcCount
-  }
-  const wan = 81
-  return wan > srcCount ? Math.ceil(wan / srcCount) * srcCount : srcCount
+function computeVideoFrames(srcCount: number): number {
+  const target = Math.max(1, targetFrames.value)
+  if (target <= srcCount) return srcCount
+  return Math.ceil(target / srcCount) * srcCount
 }
 
 async function onExport() {
@@ -255,7 +247,7 @@ async function onExport() {
     videoWidth: ew,
     videoHeight: eh,
     videoFps: videoFps.value,
-    targetFrames: wantMp4 ? computeTargetFrames(parseResult.value!.frameCount, videoFps.value) : 0,
+    targetFrames: wantMp4 ? computeVideoFrames(parseResult.value!.frameCount) : 0,
   })
   console.info('导出完成')
 }
@@ -295,9 +287,7 @@ async function onExport() {
           :export-width="exportWidth"
           :export-height="exportHeight"
           :video-fps="videoFps"
-          :loop-mode="loopMode"
-          :loop-count="loopCount"
-          :loop-duration="loopDuration"
+          :target-frames="targetFrames"
           :has-preview="renderedDirections.length > 0"
           :is-exporting="isExporting"
           @update:directions="activeDirections = $event"
@@ -313,9 +303,7 @@ async function onExport() {
           @update:export-width="exportWidth = $event"
           @update:export-height="exportHeight = $event"
           @update:video-fps="videoFps = $event"
-          @update:loop-mode="loopMode = $event"
-          @update:loop-count="loopCount = $event"
-          @update:loop-duration="loopDuration = $event"
+          @update:target-frames="targetFrames = $event"
           @export="onExport"
         />
 

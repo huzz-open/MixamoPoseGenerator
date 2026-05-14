@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { SkeletonMode, LoopMode, DirectionEntry, DirectionPresetRaw, AspectRatioPreset } from '../../types/config'
+import type { SkeletonMode, DirectionEntry, DirectionPresetRaw, AspectRatioPreset } from '../../types/config'
 import { DIRECTION_PRESETS_RAW, ASPECT_RATIO_PRESETS } from '../../types/config'
 import { useToast } from '../../composables/useToast'
 import addIcon from '../../assets/icon/add.svg'
@@ -24,9 +24,7 @@ const props = defineProps<{
   exportWidth: number
   exportHeight: number
   videoFps: number
-  loopMode: LoopMode
-  loopCount: number
-  loopDuration: number
+  targetFrames: number
   liveViewAngle: number | null
   hasPreview: boolean
   isExporting: boolean
@@ -46,9 +44,7 @@ const emit = defineEmits<{
   'update:exportWidth': [value: number]
   'update:exportHeight': [value: number]
   'update:videoFps': [value: number]
-  'update:loopMode': [value: LoopMode]
-  'update:loopCount': [value: number]
-  'update:loopDuration': [value: number]
+  'update:targetFrames': [value: number]
   export: []
 }>()
 
@@ -303,29 +299,11 @@ function addCustomDirection() {
             <input type="number" :value="videoFps" min="12" max="60" style="width:50px"
                    @input="emit('update:videoFps', parseInt(($event.target as HTMLInputElement).value) || 24)" />
           </div>
-          <div class="radio-group small">
-            <label class="radio-label">
-              <input type="radio" value="auto" :checked="loopMode === 'auto'" @change="emit('update:loopMode', 'auto')" />
-              <span>{{ t('config.loopAuto') }}</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" value="count" :checked="loopMode === 'count'" @change="emit('update:loopMode', 'count')" />
-              <span>{{ t('config.loopTimes') }}
-                <input type="number" :value="loopCount" min="1" max="20" style="width:40px"
-                       :disabled="loopMode !== 'count'"
-                       @input="emit('update:loopCount', parseInt(($event.target as HTMLInputElement).value) || 4)" />
-                {{ t('config.loopTimesUnit') }}
-              </span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" value="duration" :checked="loopMode === 'duration'" @change="emit('update:loopMode', 'duration')" />
-              <span>{{ t('config.loopTarget') }}
-                <input type="number" :value="loopDuration" min="0.5" max="30" step="0.5" style="width:50px"
-                       :disabled="loopMode !== 'duration'"
-                       @input="emit('update:loopDuration', parseFloat(($event.target as HTMLInputElement).value) || 3.5)" />
-                {{ t('config.loopTargetUnit') }}
-              </span>
-            </label>
+          <div class="input-row">
+            <span>{{ t('config.targetFrames') }}:</span>
+            <input type="number" :value="targetFrames" min="1" max="9999" style="width:60px"
+                   @input="emit('update:targetFrames', parseInt(($event.target as HTMLInputElement).value) || 81)" />
+            <span class="hint">{{ t('config.targetFramesHint') }}</span>
           </div>
         </template>
       </div>
@@ -557,6 +535,10 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 }
 .input-locked {
   opacity: 0.6;
+}
+.hint {
+  font-size: 10px;
+  opacity: 0.5;
 }
 .input-row {
   display: flex; align-items: center; gap: 6px; font-size: 12px;

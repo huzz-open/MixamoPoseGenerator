@@ -72,13 +72,37 @@ const AUTO_FIT_PADDING = 0.05
  * Apply rotation, auto-fit scaling, and centering to raw joint positions.
  * Automatically scales the skeleton to fill the canvas (with 5% padding),
  * using a consistent scale across all frames for stable animation.
+ *
+ * When inPlace is true (default), root motion is stripped before rotation
+ * by subtracting each frame's Hips XZ offset relative to the first frame.
  */
 export function transformFrames(
   frames: FrameData[],
   canvasWidth: number,
   canvasHeight: number,
   rotation: [number, number, number],
+  inPlace = true,
 ): FrameData[] {
+  // Phase 0: strip root motion so the character stays centered
+  if (inPlace && frames.length > 0) {
+    const hipsKey = 'mixamorig_Hips'
+    const firstHips = frames[0].get(hipsKey)
+    if (firstHips) {
+      const [refX, , refZ] = firstHips
+      for (const frame of frames) {
+        const hips = frame.get(hipsKey)
+        if (!hips) continue
+        const dx = hips[0] - refX
+        const dz = hips[2] - refZ
+        if (dx === 0 && dz === 0) continue
+        for (const [, pos] of frame) {
+          pos[0] -= dx
+          pos[2] -= dz
+        }
+      }
+    }
+  }
+
   const R = buildRotationMatrix(rotation[0], rotation[1], rotation[2])
 
   // Phase 1: rotate (no scaling yet)

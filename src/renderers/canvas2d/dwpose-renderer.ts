@@ -28,11 +28,11 @@ const HAND_EDGES: [number, number][] = [
 
 /**
  * Wan 2.2 DWPose body rendering:
- * 1. Draw all limbs with full color
- * 2. Darken entire canvas by 0.6
- * 3. Draw bright joint circles on top
+ * Draw limbs with pre-darkened colors (×0.6), then bright joint circles on top.
+ * Visually equivalent to draw-full → canvas×0.6 → joints, but avoids expensive
+ * per-pixel getImageData/putImageData on every frame.
  */
-function drawBodyposeWan(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[], W: number, H: number) {
+function drawBodyposeWan(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[]) {
   const stickwidth = 4
 
   for (let i = 0; i < LIMB_SEQ.length; i++) {
@@ -41,7 +41,6 @@ function drawBodyposeWan(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[], W
     const kp2 = body[k2Idx - 1]
     if (!kp1 || !kp2) continue
 
-    // Wan 2.2 naming: Y0,Y1 = kp[0]; X0,X1 = kp[1]
     const Y0 = kp1[0], Y1 = kp2[0]
     const X0 = kp1[1], X1 = kp2[1]
     const mX = (X0 + X1) / 2.0
@@ -55,20 +54,10 @@ function drawBodyposeWan(ctx: CanvasRenderingContext2D, body: (Vec3 | null)[], W
       [Math.round(length / 2), stickwidth],
       Math.round(angle), 0, 360, 1
     )
-    fillConvexPoly(ctx, polygon, COLORS[i])
+    const c = COLORS[i]
+    fillConvexPoly(ctx, polygon, [Math.round(c[0] * 0.6), Math.round(c[1] * 0.6), Math.round(c[2] * 0.6)])
   }
 
-  // canvas *= 0.6 - darken entire canvas
-  const imgData = ctx.getImageData(0, 0, W, H)
-  const d = imgData.data
-  for (let i = 0; i < d.length; i += 4) {
-    d[i] = Math.round(d[i] * 0.6)
-    d[i + 1] = Math.round(d[i + 1] * 0.6)
-    d[i + 2] = Math.round(d[i + 2] * 0.6)
-  }
-  ctx.putImageData(imgData, 0, 0)
-
-  // Draw bright joint circles
   for (let i = 0; i < body.length; i++) {
     const kp = body[i]
     if (!kp) continue
@@ -123,7 +112,7 @@ export function renderDwposeFrame(
 ): HTMLCanvasElement {
   const [canvas, ctx] = createBlackCanvas(width, height)
 
-  drawBodyposeWan(ctx, frame.body, width, height)
+  drawBodyposeWan(ctx, frame.body)
   if (drawHands) {
     drawHandposeWan(ctx, frame.leftHand)
     drawHandposeWan(ctx, frame.rightHand)

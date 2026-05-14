@@ -2,8 +2,6 @@ export type SkeletonMode = 'raw' | 'openpose' | 'dwpose'
 
 export type ExportFormat = 'png' | 'mp4'
 
-export type LoopMode = 'auto' | 'count' | 'duration'
-
 export interface AspectRatioPreset {
   id: string
   label: string
@@ -47,9 +45,7 @@ export interface VideoExportConfig {
   width: number
   height: number
   fps: number
-  loopMode: LoopMode
-  loopCount: number
-  loopDuration: number
+  targetFrames: number
 }
 
 export interface ExportConfig {
