@@ -43,6 +43,8 @@ const faceScale = ref(0.55)
 const xinsrScaling = ref(false)
 const exportPng = ref(true)
 const exportMp4 = ref(false)
+const spriteSheetEnabled = ref(false)
+const spriteSheetCols = ref(4)
 const aspectRatio = ref('1:1')
 const exportWidth = ref(512)
 const exportHeight = ref(512)
@@ -94,6 +96,8 @@ const frameCount = computed(() => {
   if (dirs.length === 0) return 0
   return dirs[preview.currentDirection.value]?.frames.length ?? 0
 })
+
+const parseFrameCount = computed(() => parseResult.value?.frameCount ?? 0)
 
 watch(error, (e) => {
   if (e) {
@@ -241,6 +245,7 @@ async function onExport() {
   await exportAll({
     png: wantPng,
     mp4: !!wantMp4,
+    spriteSheet: spriteSheetEnabled.value ? { enabled: true, cols: spriteSheetCols.value } : undefined,
     pngDirections: (wantPng && fullDirs) ? fullDirs : renderedDirections.value as any[],
     mp4Directions: wantMp4 ? fullDirs : undefined,
     animationName: animationName.value,
@@ -248,6 +253,9 @@ async function onExport() {
     videoHeight: eh,
     videoFps: videoFps.value,
     targetFrames: wantMp4 ? computeVideoFrames(parseResult.value!.frameCount) : 0,
+    daeXml: daeXmlContent.value,
+    frameCount: parseResult.value?.frameCount,
+    directions: activeDirections.value,
   })
   console.info('导出完成')
 }
@@ -283,6 +291,10 @@ async function onExport() {
           :xinsr-scaling="xinsrScaling"
           :export-png="exportPng"
           :export-mp4="exportMp4"
+          :sprite-sheet-enabled="spriteSheetEnabled"
+          :sprite-sheet-cols="spriteSheetCols"
+          :frame-count="parseFrameCount"
+          :has-skin="!!daeXmlContent"
           :aspect-ratio="aspectRatio"
           :export-width="exportWidth"
           :export-height="exportHeight"
@@ -299,6 +311,8 @@ async function onExport() {
           @update:xinsr-scaling="xinsrScaling = $event"
           @update:export-png="exportPng = $event"
           @update:export-mp4="exportMp4 = $event"
+          @update:sprite-sheet-enabled="spriteSheetEnabled = $event"
+          @update:sprite-sheet-cols="spriteSheetCols = $event"
           @update:aspect-ratio="aspectRatio = $event"
           @update:export-width="exportWidth = $event"
           @update:export-height="exportHeight = $event"

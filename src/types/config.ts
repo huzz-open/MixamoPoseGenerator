@@ -48,6 +48,11 @@ export interface VideoExportConfig {
   targetFrames: number
 }
 
+export interface SpriteSheetConfig {
+  enabled: boolean
+  cols: number
+}
+
 export interface ExportConfig {
   format: ExportFormat
   outputName: string

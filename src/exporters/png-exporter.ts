@@ -47,6 +47,42 @@ export async function exportPngZip(
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
 }
 
+/**
+ * Compose multiple frame canvases into a single sprite sheet canvas.
+ * Frames are laid out left-to-right, top-to-bottom in a grid with the
+ * given number of columns. Rows are derived automatically.
+ */
+export function composeSpriteSheet(
+  frames: HTMLCanvasElement[],
+  cols: number,
+  transparent = false,
+): HTMLCanvasElement {
+  if (frames.length === 0) {
+    const empty = document.createElement('canvas')
+    empty.width = 1
+    empty.height = 1
+    return empty
+  }
+
+  const cellW = frames[0].width
+  const cellH = frames[0].height
+  const safeCols = Math.max(1, Math.min(cols, frames.length))
+  const rows = Math.ceil(frames.length / safeCols)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = safeCols * cellW
+  canvas.height = rows * cellH
+  const ctx = canvas.getContext('2d')!
+
+  for (let i = 0; i < frames.length; i++) {
+    const col = i % safeCols
+    const row = Math.floor(i / safeCols)
+    ctx.drawImage(frames[i], col * cellW, row * cellH)
+  }
+
+  return transparent ? canvas : flattenToRGB(canvas)
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

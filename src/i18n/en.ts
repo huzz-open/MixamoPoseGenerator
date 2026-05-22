@@ -37,6 +37,10 @@ export default {
     targetFramesHint: 'loops to fill if needed',
     exporting: 'Exporting...',
     exportToDisk: 'Export to disk',
+    spriteSheet: 'Merge into Sprite Sheet',
+    spriteSheetCols: 'Columns',
+    spriteSheetAuto: 'Auto',
+    spriteSheetNeedsSkin: '(needs skin data)',
     angleRangeError: 'Please enter an angle between 0~359',
     angleDuplicate: 'Angle {angle}° already exists ({name}), skipped',
   },
@@ -79,6 +83,7 @@ export default {
   },
   progress: {
     encoding: 'Encoding...',
+    renderingSkin: 'Rendering skin frames...',
     packingZip: 'Packing ZIP...',
     done: 'Done',
   },

@@ -20,6 +20,10 @@ const props = defineProps<{
   xinsrScaling: boolean
   exportPng: boolean
   exportMp4: boolean
+  spriteSheetEnabled: boolean
+  spriteSheetCols: number
+  frameCount: number
+  hasSkin: boolean
   aspectRatio: string
   exportWidth: number
   exportHeight: number
@@ -40,6 +44,8 @@ const emit = defineEmits<{
   'update:xinsrScaling': [value: boolean]
   'update:exportPng': [value: boolean]
   'update:exportMp4': [value: boolean]
+  'update:spriteSheetEnabled': [value: boolean]
+  'update:spriteSheetCols': [value: number]
   'update:aspectRatio': [value: string]
   'update:exportWidth': [value: number]
   'update:exportHeight': [value: number]
@@ -268,6 +274,27 @@ function addCustomDirection() {
           />
           <span>{{ t('config.mp4Video') }}</span>
         </label>
+        <label class="checkbox-label" :class="{ 'label-disabled': !hasSkin }">
+          <input
+            type="checkbox"
+            :checked="spriteSheetEnabled"
+            :disabled="!hasSkin"
+            @change="emit('update:spriteSheetEnabled', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>{{ t('config.spriteSheet') }}</span>
+          <span v-if="!hasSkin" class="hint">{{ t('config.spriteSheetNeedsSkin') }}</span>
+        </label>
+      </div>
+
+      <div v-if="spriteSheetEnabled && hasSkin" class="sprite-sheet-opts">
+        <div class="input-row">
+          <span>{{ t('config.spriteSheetCols') }}:</span>
+          <input type="number" :value="spriteSheetCols" min="1" :max="Math.max(1, frameCount)" style="width:50px"
+                 @input="emit('update:spriteSheetCols', Math.max(1, parseInt(($event.target as HTMLInputElement).value) || 1))" />
+          <button class="auto-btn" @click="emit('update:spriteSheetCols', Math.max(1, Math.ceil(Math.sqrt(frameCount))))">
+            {{ t('config.spriteSheetAuto') }}
+          </button>
+        </div>
       </div>
 
       <div class="export-opts">
@@ -311,7 +338,7 @@ function addCustomDirection() {
 
     <button
       class="btn btn-accent full-width"
-      :disabled="!hasPreview || isExporting || (!exportPng && !exportMp4)"
+      :disabled="!hasPreview || isExporting || (!exportPng && !exportMp4 && !spriteSheetEnabled)"
       @click="emit('export')"
     >
       {{ isExporting ? t('config.exporting') : t('config.exportToDisk') }}
@@ -559,4 +586,28 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 }
 .btn-accent:hover:not(:disabled) { filter: brightness(1.1); }
 .full-width { width: 100%; }
+.sprite-sheet-opts {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px 8px; background: var(--bg-secondary); border-radius: 6px;
+  margin-top: 2px;
+}
+.auto-btn {
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.auto-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent, #4a9eff);
+}
+.label-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 </style>

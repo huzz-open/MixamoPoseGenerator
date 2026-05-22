@@ -3,13 +3,15 @@ import { useI18n } from 'vue-i18n'
 import JSZip from 'jszip'
 import type { DirectionResult } from './usePoseGenerator'
 import { exportMp4 } from '../exporters/video-exporter'
-import { downloadBlob } from '../exporters/png-exporter'
+import { downloadBlob, composeSpriteSheet } from '../exporters/png-exporter'
+import { renderSkinFrames } from '../exporters/skin-renderer'
 import { flattenToRGB } from '../renderers/render-utils'
+import type { SpriteSheetConfig } from '../types/config'
 
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  const rgb = flattenToRGB(canvas)
+function canvasToBlob(canvas: HTMLCanvasElement, preserveAlpha = false): Promise<Blob> {
+  const target = preserveAlpha ? canvas : flattenToRGB(canvas)
   return new Promise((resolve, reject) => {
-    rgb.toBlob(blob => {
+    target.toBlob(blob => {
       if (blob) resolve(blob)
       else reject(new Error('Failed to create blob from canvas'))
     }, 'image/png')
@@ -19,6 +21,7 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 export interface ExportOptions {
   png: boolean
   mp4: boolean
+  spriteSheet?: SpriteSheetConfig
   pngDirections: DirectionResult[]
   mp4Directions?: DirectionResult[]
   animationName: string
@@ -26,6 +29,9 @@ export interface ExportOptions {
   videoHeight: number
   videoFps: number
   targetFrames: number
+  daeXml?: string | null
+  frameCount?: number
+  directions?: { name: string; angle: number }[]
 }
 
 export function useExport() {
@@ -53,6 +59,33 @@ export function useExport() {
             zip.file(`${folder}/${dir.name}/${String(i).padStart(pad, '0')}.png`, blob)
             done++
           }
+        }
+      }
+
+      if (opts.spriteSheet?.enabled && opts.daeXml && opts.frameCount && opts.directions) {
+        exportProgress.value = { current: 0, total: 1, label: t('progress.renderingSkin') }
+
+        const skinDirs = await renderSkinFrames(
+          opts.daeXml,
+          opts.directions,
+          opts.frameCount,
+          opts.videoWidth,
+          opts.videoHeight,
+          (cur, total, dir) => {
+            exportProgress.value = { current: cur, total, label: `Skin ${dir}: ${cur}/${total}` }
+          },
+        )
+
+        for (let i = 0; i < skinDirs.length; i++) {
+          const dir = skinDirs[i]
+          exportProgress.value = {
+            current: i,
+            total: skinDirs.length,
+            label: `Sheet ${dir.name}`,
+          }
+          const sheet = composeSpriteSheet(dir.frames, opts.spriteSheet.cols, true)
+          const blob = await canvasToBlob(sheet, true)
+          zip.file(`${folder}/${dir.name}/spritesheet.png`, blob)
         }
       }
 

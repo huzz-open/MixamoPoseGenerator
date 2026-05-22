@@ -37,6 +37,10 @@ export default {
     targetFramesHint: '不足时自动循环补齐',
     exporting: '导出中...',
     exportToDisk: '导出到磁盘',
+    spriteSheet: '合并为 Sprite Sheet',
+    spriteSheetCols: '列数',
+    spriteSheetAuto: '自动',
+    spriteSheetNeedsSkin: '(需要皮肤数据)',
     angleRangeError: '请输入 0~359 之间的角度',
     angleDuplicate: '角度 {angle}° 已存在 ({name})，跳过添加',
   },
@@ -79,6 +83,7 @@ export default {
   },
   progress: {
     encoding: '编码中...',
+    renderingSkin: '渲染皮肤帧...',
     packingZip: '打包 ZIP...',
     done: '完成',
   },
